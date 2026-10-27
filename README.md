@@ -16,6 +16,22 @@ Para enviar de verdade: `MAIL_MODE=smtp` + `SMTP_*` no `.env` (Gmail com senha d
 
 O banco é criado sozinho em `./data/tempoalerta.db`.
 
+## Publicar no Render (demonstração)
+
+O `render.yaml` configura a API como Web Service gratuito. Envie as alterações
+para o repositório GitHub `TempoAlerta-api`, crie um **Blueprint** no Render e
+conecte esse repositório. O Render instalará as dependências, iniciará a API e
+usará `/api/saude` para verificar se ela está ativa.
+
+O Blueprint gera `JWT_SECRET` automaticamente e configura e-mail em modo `log`,
+agendador desligado e SQLite em `./data/tempoalerta.db`. No plano gratuito, o
+disco é temporário: reinícios e novos deploys podem apagar os dados. Use apenas
+contas e dados de demonstração; não armazene dados reais nesse serviço.
+
+Se a URL do frontend for diferente de `https://tempoalerta-web.onrender.com`,
+altere `CORS_ORIGIN` nas variáveis do serviço da API para a URL pública do
+frontend, sem barra no final.
+
 ## Banco
 
 | tabela | colunas principais |
@@ -57,10 +73,10 @@ O banco é criado sozinho em `./data/tempoalerta.db`.
 
 ## Ligar o front
 
-1. Copie `front-integration/api.ts` para `tempoalerta/src/api.ts`.
-2. Em `tempoalerta/.env`: `VITE_API_URL=http://localhost:3333/api`.
+1. Copie `front-integration/api.ts` para `TempoAlerta/src/api.ts`.
+2. Em `TempoAlerta/.env.local`: `VITE_API_URL=http://localhost:3333/api`.
 3. O CORS já aceita `localhost:8443` (Figma Make) e `localhost:5173` (Vite). Outras origens: `CORS_ORIGIN` no `.env`.
-4. Hoje o `App.tsx` usa dados fixos; troque por `api.*` (ex.: `api.login`, `api.cidades()`, `api.previsao(id)`, `api.alertas()`).
+4. Hoje o `App.tsx` usa dados fixos; troque por `api.*` (ex.: `api.login`, `api.cidades()`, `api.previsao(id)`, `api.alertas()`). A publicação do frontend, por si só, não integra esses formulários com a API.
 
 ## Observações
 
