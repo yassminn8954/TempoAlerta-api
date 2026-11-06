@@ -92,8 +92,19 @@ export function alertasRoutes(deps: Deps) {
 
     let msg
     if (b.tipo === 'previsao_diaria') msg = mensagemDiaria(u, cidade, prev)
-    else if (b.tipo === 'chuva_forte') msg = mensagemChuva(u, cidade, picoDeChuva(prev)!, pref.limiar_chuva_mm)
-    else msg = mensagemGeada(u, cidade, menorTemperatura(prev)!, pref.limiar_geada_c)
+    else if (b.tipo === 'chuva_forte') {
+      const evento = picoDeChuva(prev)
+      if (!evento || evento.pico_mm < pref.limiar_chuva_mm) {
+        throw new HttpError(409, 'A previsão atual não indica chuva acima do seu limite; nenhum alerta foi enviado')
+      }
+      msg = mensagemChuva(u, cidade, evento, pref.limiar_chuva_mm)
+    } else {
+      const evento = menorTemperatura(prev)
+      if (!evento || evento.minima > pref.limiar_geada_c) {
+        throw new HttpError(409, 'A previsão atual não indica geada abaixo do seu limite; nenhum alerta foi enviado')
+      }
+      msg = mensagemGeada(u, cidade, evento, pref.limiar_geada_c)
+    }
     msg = { ...msg, assunto: `[TESTE] ${msg.assunto}`, texto: `[TESTE] ${msg.texto}` }
 
     const r2 = await enviarERegistrar(deps, u, cidade, b.tipo, msg, new Date())

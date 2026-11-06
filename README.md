@@ -11,6 +11,8 @@ npm run dev               # http://localhost:3333/api
 npm test                  # testes (banco SQLite em memória)
 ```
 
+As implementações Fake ficam somente nos testes; a aplicação real não usa dados ou entregas simuladas.
+
 Crie um banco PostgreSQL pelo pgAdmin, por exemplo `tempoalerta`, e configure `DATABASE_URL` no `.env`:
 
 ```env
@@ -19,12 +21,11 @@ DATABASE_URL=postgresql://postgres:SUA_SENHA@localhost:5432/tempoalerta
 
 Troque `postgres` pelo usuário PostgreSQL correto. Se a senha tiver caracteres especiais, codifique-os para URL (por exemplo, `@` como `%40`). Não compartilhe nem versiona o `.env`. Ao iniciar, a API cria as tabelas e índices necessários no banco indicado.
 
-Por padrão `MAIL_MODE=log`: o e-mail é **impresso no console** (não envia de verdade).
-Para enviar de verdade: `MAIL_MODE=smtp` + `SMTP_*` no `.env` (Gmail com senha de app, Mailtrap, Brevo etc.).
+Não há envio de e-mail simulado. `MAIL_MODE=off` desativa e-mail; para entrega real configure `MAIL_MODE=smtp`, `SMTP_HOST`, `SMTP_USER` e `SMTP_PASS`. O Telegram funciona como canal independente quando o bot está configurado e a conta está vinculada.
 
 ## Telegram
 
-Configure o token do bot somente no `.env` do back-end. A API inicia o polling do bot quando `TELEGRAM_BOT_TOKEN` está definido; `TELEGRAM_BOT_USERNAME` deve corresponder ao username criado no BotFather (sem `@`).
+Configure o token do bot somente no `.env` do back-end. A API inicia o polling do bot quando `TELEGRAM_BOT_TOKEN` está definido; `TELEGRAM_BOT_USERNAME` deve corresponder ao username criado no BotFather (sem `@`). Os testes de envio usam a previsão atual: chuva/geada só são enviados se atingirem o limiar cadastrado.
 
 Com o usuário autenticado no front:
 
@@ -95,10 +96,12 @@ frontend, sem barra no final.
 
 ## Ligar o front
 
-1. Copie `front-integration/api.ts` para `TempoAlerta/src/api.ts`.
-2. Em `TempoAlerta/.env.local`: `VITE_API_URL=http://localhost:3333/api`.
+1. O projeto front importa o cliente de API em `src/api.ts`.
+2. Em `TempoAlerta/.env`, defina `VITE_API_URL=http://localhost:3333/api` para desenvolvimento local; em produção use a URL pública da API.
 3. O CORS já aceita `localhost:8443` (Figma Make) e `localhost:5173` (Vite). Outras origens: `CORS_ORIGIN` no `.env`.
-4. Hoje o `App.tsx` usa dados fixos; troque por `api.*` (ex.: `api.login`, `api.cidades()`, `api.previsao(id)`, `api.alertas()`). A publicação do frontend, por si só, não integra esses formulários com a API.
+4. Login/cadastro, cidades, previsão, preferências, histórico e teste de notificação chamam a API. Sem API disponível, o front exibe o erro em vez de preencher dados de exemplo.
+
+Para o Render, `render.yaml` espera que `DATABASE_URL` (PostgreSQL acessível pelo serviço) e `TELEGRAM_BOT_TOKEN` sejam configurados no painel. O plano gratuito pode suspender o serviço quando ocioso, interrompendo o scheduler e o polling do bot.
 
 ## Observações
 

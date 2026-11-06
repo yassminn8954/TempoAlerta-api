@@ -9,7 +9,7 @@ import type { TelegramNotifier } from './telegram.js'
 export interface Deps {
   db: DB
   weather: WeatherClient
-  mailer: Mailer
+  mailer?: Mailer
   telegram?: TelegramNotifier
 }
 
@@ -24,10 +24,15 @@ export async function enviarERegistrar(
 ): Promise<{ id: number; status: 'enviado' | 'falhou' }> {
   let algumEnviado = false
   const erros: string[] = []
-  try {
-    await deps.mailer.enviar(u.email, msg.assunto, msg.texto, msg.html)
-  } catch (e) {
-    erros.push(`E-mail: ${(e as Error).message}`)
+  if (deps.mailer) {
+    try {
+      await deps.mailer.enviar(u.email, msg.assunto, msg.texto, msg.html)
+      algumEnviado = true
+    } catch (e) {
+      erros.push(`E-mail: ${(e as Error).message}`)
+    }
+  } else {
+    erros.push('E-mail: canal desativado')
   }
   if (u.telegram_chat_id) {
     if (deps.telegram) {
@@ -40,9 +45,6 @@ export async function enviarERegistrar(
     } else {
       erros.push('Telegram: envio não configurado no servidor')
     }
-  }
-  if (!erros.some((erro) => erro.startsWith('E-mail:'))) {
-    algumEnviado = true
   }
   const status: 'enviado' | 'falhou' = algumEnviado ? 'enviado' : 'falhou'
   const erro = erros.length ? erros.join('; ') : null

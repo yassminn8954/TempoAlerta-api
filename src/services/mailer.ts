@@ -5,7 +5,13 @@ export interface Mailer {
   enviar(para: string, assunto: string, texto: string, html: string): Promise<void>
 }
 
-export function criarMailer(): Mailer {
+export function criarMailer(): Mailer | undefined {
+  if (env.mailMode === 'off') return undefined
+
+  if (!env.smtp.host || !env.smtp.user || !env.smtp.pass) {
+    throw new Error('MAIL_MODE=smtp exige SMTP_HOST, SMTP_USER e SMTP_PASS')
+  }
+
   if (env.mailMode === 'smtp') {
     const t = nodemailer.createTransport({
       host: env.smtp.host,
@@ -19,10 +25,5 @@ export function criarMailer(): Mailer {
       },
     }
   }
-  // modo log: não envia nada, só imprime (bom para desenvolver/demonstrar)
-  return {
-    async enviar(para, assunto, texto) {
-      console.log(`\n[email simulado] para=${para}\nassunto: ${assunto}\n${texto}\n`)
-    },
-  }
+  return undefined
 }

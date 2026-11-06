@@ -20,6 +20,6 @@ if (env.telegramBotToken) void iniciarPollingTelegram(db, env.telegramBotToken)
 
 app.listen(env.port, () =>
   console.log(
-    `TempoAlerta API em http://localhost:${env.port}/api (e-mail: ${env.mailMode}; Telegram: ${telegram ? 'on' : 'off'})`,
+    `TempoAlerta API em http://localhost:${env.port}/api (e-mail: ${deps.mailer ? 'smtp' : 'off'}; Telegram: ${telegram ? 'on' : 'off'})`,
   ),
 )

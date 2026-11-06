@@ -13,7 +13,12 @@ export function telegramRoutes(db: DB) {
       'SELECT telegram_chat_id FROM usuarios WHERE id = ?',
       [req.userId],
     )
-    res.json({ vinculado: Boolean(rows[0]?.telegram_chat_id), bot_username: env.telegramBotUsername })
+    res.json({
+      vinculado: Boolean(rows[0]?.telegram_chat_id),
+      bot_username: env.telegramBotUsername,
+      bot_configurado: Boolean(env.telegramBotToken),
+      email_ativo: env.mailMode === 'smtp',
+    })
   })
 
   router.post('/vinculo', async (req, res) => {

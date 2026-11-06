@@ -156,11 +156,30 @@ describe('API', () => {
     assert.equal((await t.api('GET', '/telegram/status', undefined, u.token)).body.vinculado, false)
   })
 
+  it('não registra como enviado quando não há canal real configurado', async () => {
+    const u = await t.novoUsuario()
+    const cidade = (await t.api('POST', '/cidades', t.campinas, u.token)).body
+    const mailer = t.deps.mailer
+    t.deps.mailer = undefined
+    try {
+      const resultado = await t.api(
+        'POST',
+        '/alertas/teste',
+        { cidadeId: cidade.id, tipo: 'previsao_diaria' },
+        u.token,
+      )
+      assert.equal(resultado.body.status, 'falhou')
+    } finally {
+      t.deps.mailer = mailer
+    }
+  })
+
   it('histórico: teste de envio, filtros, detalhe e isolamento entre usuários', async () => {
     const u = await t.novoUsuario()
     const c = (await t.api('POST', '/cidades', t.campinas, u.token)).body
     const a = await t.api('POST', '/alertas/teste', { cidadeId: c.id, tipo: 'previsao_diaria' }, u.token)
     assert.equal(a.body.status, 'enviado')
+    t.weather.cenario = { minima: 2 }
     await t.api('POST', '/alertas/teste', { cidadeId: c.id, tipo: 'geada' }, u.token)
     assert.equal(t.mailer.enviados.at(-1)!.para, u.email)
 
