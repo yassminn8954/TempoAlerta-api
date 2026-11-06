@@ -55,9 +55,25 @@ const UF: Record<string, string> = {
 }
 
 const TTL_MS = 10 * 60 * 1000
+const RATE_LIMIT_COOLDOWN_MS = 60 * 1000
+
+class WeatherRateLimitError extends WeatherError {
+  constructor(public retryAfterMs: number) {
+    super('Open-Meteo respondeu 429')
+  }
+}
+
+function retryAfterMs(value: string | null) {
+  if (!value) return RATE_LIMIT_COOLDOWN_MS
+  const seconds = Number(value)
+  const delay = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(value) - Date.now()
+  return delay > 0 ? delay : RATE_LIMIT_COOLDOWN_MS
+}
 
 export class OpenMeteoClient implements WeatherClient {
   private cache = new Map<string, { ate: number; dado: Previsao }>()
+  private previsoesEmAndamento = new Map<string, Promise<Previsao>>()
+  private previsoesBloqueadasAte = 0
 
   private async getJson(url: string): Promise<any> {
     let res: Response
@@ -66,6 +82,7 @@ export class OpenMeteoClient implements WeatherClient {
     } catch (e) {
       throw new WeatherError(`Open-Meteo indisponível: ${(e as Error).message}`)
     }
+    if (res.status === 429) throw new WeatherRateLimitError(retryAfterMs(res.headers.get('Retry-After')))
     if (!res.ok) throw new WeatherError(`Open-Meteo respondeu ${res.status}`)
     return res.json()
   }
@@ -89,7 +106,29 @@ export class OpenMeteoClient implements WeatherClient {
     const key = `${lat.toFixed(2)},${lon.toFixed(2)}`
     const hit = this.cache.get(key)
     if (hit && hit.ate > Date.now()) return hit.dado
+    if (this.previsoesBloqueadasAte > Date.now()) {
+      if (hit) return hit.dado
+      throw new WeatherError('Open-Meteo está limitando consultas temporariamente; tente novamente em instantes')
+    }
 
+    const emAndamento = this.previsoesEmAndamento.get(key)
+    if (emAndamento) return emAndamento
+
+    const requisicao = this.buscarPrevisao(lat, lon, key, hit)
+    this.previsoesEmAndamento.set(key, requisicao)
+    try {
+      return await requisicao
+    } finally {
+      this.previsoesEmAndamento.delete(key)
+    }
+  }
+
+  private async buscarPrevisao(
+    lat: number,
+    lon: number,
+    key: string,
+    hit: { ate: number; dado: Previsao } | undefined,
+  ): Promise<Previsao> {
     const url =
       'https://api.open-meteo.com/v1/forecast?' +
       new URLSearchParams({
@@ -101,40 +140,48 @@ export class OpenMeteoClient implements WeatherClient {
         timezone: env.tz,
         forecast_days: '7',
       })
-    const j = await this.getJson(url)
-    const c = j.current
-    const d = j.daily
-    const h = j.hourly
-    if (!c || !d || !h) throw new WeatherError('Resposta inesperada da Open-Meteo')
+    try {
+      const j = await this.getJson(url)
+      const c = j.current
+      const d = j.daily
+      const h = j.hourly
+      if (!c || !d || !h) throw new WeatherError('Resposta inesperada da Open-Meteo')
 
-    const dado: Previsao = {
-      atual: {
-        hora: c.time,
-        temperatura: c.temperature_2m,
-        sensacao: c.apparent_temperature,
-        umidade: c.relative_humidity_2m,
-        vento_kmh: c.wind_speed_10m,
-        chuva_mm: c.precipitation ?? 0,
-        codigo: c.weather_code,
-      },
-      dias: (d.time as string[]).map((data, i) => ({
-        data,
-        max: d.temperature_2m_max[i],
-        min: d.temperature_2m_min[i],
-        chuva_mm: d.precipitation_sum[i] ?? 0,
-        prob_chuva: d.precipitation_probability_max[i] ?? 0,
-        codigo: d.weather_code[i],
-      })),
-      horas: (h.time as string[]).map((hora, i) => ({
-        hora,
-        temperatura: h.temperature_2m[i],
-        chuva_mm: h.precipitation[i] ?? 0,
-        prob_chuva: h.precipitation_probability[i] ?? 0,
-      })),
-      atualizado_em: new Date().toISOString(),
+      const dado: Previsao = {
+        atual: {
+          hora: c.time,
+          temperatura: c.temperature_2m,
+          sensacao: c.apparent_temperature,
+          umidade: c.relative_humidity_2m,
+          vento_kmh: c.wind_speed_10m,
+          chuva_mm: c.precipitation ?? 0,
+          codigo: c.weather_code,
+        },
+        dias: (d.time as string[]).map((data, i) => ({
+          data,
+          max: d.temperature_2m_max[i],
+          min: d.temperature_2m_min[i],
+          chuva_mm: d.precipitation_sum[i] ?? 0,
+          prob_chuva: d.precipitation_probability_max[i] ?? 0,
+          codigo: d.weather_code[i],
+        })),
+        horas: (h.time as string[]).map((hora, i) => ({
+          hora,
+          temperatura: h.temperature_2m[i],
+          chuva_mm: h.precipitation[i] ?? 0,
+          prob_chuva: h.precipitation_probability[i] ?? 0,
+        })),
+        atualizado_em: new Date().toISOString(),
+      }
+      this.cache.set(key, { ate: Date.now() + TTL_MS, dado })
+      return dado
+    } catch (error) {
+      if (error instanceof WeatherRateLimitError) {
+        this.previsoesBloqueadasAte = Date.now() + error.retryAfterMs
+      }
+      if (hit) return hit.dado
+      throw error
     }
-    this.cache.set(key, { ate: Date.now() + TTL_MS, dado })
-    return dado
   }
 }
 
