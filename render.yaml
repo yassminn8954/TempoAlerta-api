@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: tempoalerta-api
+    runtime: node
+    plan: free
+    buildCommand: npm ci --include=dev
+    startCommand: npm start
+    healthCheckPath: /api/saude
+    envVars:
+      - key: NODE_VERSION
+        value: 24.14.0
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        value: https://tempoalerta-web.onrender.com
+      - key: DB_PATH
+        value: ./data/tempoalerta.db
+      - key: SCHEDULER
+        value: off
+      - key: MAIL_MODE
+        value: log
