@@ -1,6 +1,6 @@
 # TempoAlerta — API (back-end)
 
-Node 20+ · TypeScript · Express 5 · SQLite (better-sqlite3) · Open-Meteo (previsão + geocodificação) · node-cron · Nodemailer
+Node 20+ · TypeScript · Express 5 · PostgreSQL · Open-Meteo (previsão + geocodificação) · node-cron · Nodemailer
 
 ## Rodar
 
@@ -8,13 +8,32 @@ Node 20+ · TypeScript · Express 5 · SQLite (better-sqlite3) · Open-Meteo (pr
 npm install
 cp .env.example .env      # troque o JWT_SECRET
 npm run dev               # http://localhost:3333/api
-npm test                  # 20 testes
+npm test                  # testes (banco SQLite em memória)
 ```
+
+Crie um banco PostgreSQL pelo pgAdmin, por exemplo `tempoalerta`, e configure `DATABASE_URL` no `.env`:
+
+```env
+DATABASE_URL=postgresql://postgres:SUA_SENHA@localhost:5432/tempoalerta
+```
+
+Troque `postgres` pelo usuário PostgreSQL correto. Se a senha tiver caracteres especiais, codifique-os para URL (por exemplo, `@` como `%40`). Não compartilhe nem versiona o `.env`. Ao iniciar, a API cria as tabelas e índices necessários no banco indicado.
 
 Por padrão `MAIL_MODE=log`: o e-mail é **impresso no console** (não envia de verdade).
 Para enviar de verdade: `MAIL_MODE=smtp` + `SMTP_*` no `.env` (Gmail com senha de app, Mailtrap, Brevo etc.).
 
-O banco é criado sozinho em `./data/tempoalerta.db`.
+## Telegram
+
+Configure o token do bot somente no `.env` do back-end. A API inicia o polling do bot quando `TELEGRAM_BOT_TOKEN` está definido; `TELEGRAM_BOT_USERNAME` deve corresponder ao username criado no BotFather (sem `@`).
+
+Com o usuário autenticado no front:
+
+1. Consulte `api.telegramStatus()`.
+2. Gere um link de uso único com `api.criarVinculoTelegram()` e abra `url` no navegador. O código expira em 10 minutos.
+3. O usuário toca em **Start** no Telegram. O vínculo é confirmado pelo bot; depois, previsão diária, chuva forte e geada também são enviados para essa conversa.
+4. Para remover o vínculo, chame `api.desvincularTelegram()`.
+
+O chat é associado à conta autenticada, não se deve pedir o `chat_id` manualmente. Não execute mais de uma instância com polling do mesmo bot ao mesmo tempo.
 
 ## Banco
 
@@ -44,6 +63,9 @@ O banco é criado sozinho em `./data/tempoalerta.db`.
 | GET | `/alertas` | histórico: `cidadeId, tipo, periodo(dias), busca, pagina, limite` |
 | GET | `/alertas/:id` | detalhe + dados que originaram o alerta |
 | POST | `/alertas/teste` | `{cidadeId, tipo}` envia na hora (demonstração) |
+| GET | `/telegram/status` | informa se o Telegram está vinculado |
+| POST | `/telegram/vinculo` | gera link de vinculação, válido por 10 minutos |
+| DELETE | `/telegram/vinculo` | remove o vínculo com o Telegram |
 
 `tipo`: `previsao_diaria` · `chuva_forte` · `geada`
 
@@ -65,5 +87,5 @@ O banco é criado sozinho em `./data/tempoalerta.db`.
 ## Observações
 
 - Senhas com bcrypt; JWT de 7 dias; consultas SQL parametrizadas.
-- Para produção: `NODE_ENV=production` exige `JWT_SECRET` definido. Sugestões: rate limit no login (`express-rate-limit`), HTTPS, trocar SQLite por Postgres se for escalar.
+- Para produção: `NODE_ENV=production` exige `JWT_SECRET` definido. Sugestões: rate limit no login (`express-rate-limit`) e HTTPS.
 - Open-Meteo gratuito é para uso não comercial; para uso comercial veja a licença deles.

@@ -40,7 +40,7 @@ export function alertasRoutes(deps: Deps) {
   const r = Router()
   r.use(auth)
 
-  r.get('/', (req, res) => {
+  r.get('/', async (req, res) => {
     const q = listaSchema.parse(req.query)
     const where = ['a.usuario_id = ?']
     const args: (string | number)[] = [req.userId!]
@@ -55,26 +55,39 @@ export function alertasRoutes(deps: Deps) {
       args.push(`%${q.busca.replace(/[\\%_]/g, '\\$&')}%`)
     }
     const w = where.join(' AND ')
-    const total = (db.prepare(`SELECT COUNT(*) AS n FROM alertas_enviados a WHERE ${w}`).get(...args) as any).n
-    const rows = db
-      .prepare(`${SELECT} WHERE ${w} ORDER BY a.enviado_em DESC LIMIT ? OFFSET ?`)
-      .all(...args, q.limite, (q.pagina - 1) * q.limite)
-    res.json({ itens: rows.map(formatar), total, pagina: q.pagina, limite: q.limite })
+    const { rows: totais } = await db.query<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM alertas_enviados a WHERE ${w}`,
+      args,
+    )
+    const { rows } = await db.query(
+      `${SELECT} WHERE ${w} ORDER BY a.enviado_em DESC LIMIT ? OFFSET ?`,
+      [...args, q.limite, (q.pagina - 1) * q.limite],
+    )
+    res.json({ itens: rows.map(formatar), total: Number(totais[0].n), pagina: q.pagina, limite: q.limite })
   })
 
-  r.get('/:id', (req, res) => {
+  r.get('/:id', async (req, res) => {
     const id = z.coerce.number().int().parse(req.params.id)
-    const a = db.prepare(`${SELECT} WHERE a.id = ? AND a.usuario_id = ?`).get(id, req.userId) as any
+    const { rows: alertas } = await db.query(
+      `${SELECT} WHERE a.id = ? AND a.usuario_id = ?`,
+      [id, req.userId],
+    )
+    const a = alertas[0] as any
     if (!a) throw new HttpError(404, 'Alerta não encontrado')
-    const u = db.prepare('SELECT email FROM usuarios WHERE id = ?').get(req.userId) as Pick<UsuarioRow, 'email'>
-    res.json({ ...formatar(a), dados: a.dados_json ? JSON.parse(a.dados_json) : null, destinatario: u.email })
+    const { rows: usuarios } = await db.query<Pick<UsuarioRow, 'email'>>(
+      'SELECT email FROM usuarios WHERE id = ?',
+      [req.userId],
+    )
+    const dados = typeof a.dados_json === 'string' ? JSON.parse(a.dados_json) : a.dados_json
+    res.json({ ...formatar(a), dados: dados ?? null, destinatario: usuarios[0].email })
   })
 
   // Dispara um envio na hora (útil para demonstrar o sistema sem esperar o horário)
   r.post('/teste', async (req, res) => {
     const b = z.object({ cidadeId: z.number().int(), tipo: z.enum(TIPOS) }).parse(req.body)
-    const { cidade, pref } = cidadeDoUsuario(db, req.userId!, b.cidadeId)
-    const u = db.prepare('SELECT * FROM usuarios WHERE id = ?').get(req.userId) as UsuarioRow
+    const { cidade, pref } = await cidadeDoUsuario(db, req.userId!, b.cidadeId)
+    const { rows: usuarios } = await db.query<UsuarioRow>('SELECT * FROM usuarios WHERE id = ?', [req.userId])
+    const u = usuarios[0]
     const prev = await weather.previsao(cidade.latitude, cidade.longitude)
 
     let msg

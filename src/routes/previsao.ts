@@ -18,7 +18,7 @@ export function previsaoRoutes({ db, weather }: Deps) {
 
   r.get('/:cidadeId', async (req, res) => {
     const id = z.coerce.number().int().parse(req.params.cidadeId)
-    const { cidade, pref } = cidadeDoUsuario(db, req.userId!, id)
+    const { cidade, pref } = await cidadeDoUsuario(db, req.userId!, id)
     const p = await weather.previsao(cidade.latitude, cidade.longitude)
 
     const dias = p.dias.map((d, i) => ({

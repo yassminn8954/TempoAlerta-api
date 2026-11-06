@@ -8,8 +8,13 @@ const as0630 = new Date('2026-10-26T09:30:00Z')
 const as0559 = new Date('2026-10-26T08:59:00Z')
 const as0800 = new Date('2026-10-26T11:00:00Z')
 
-const contar = (t: Awaited<ReturnType<typeof subir>>, tipo: string, status = 'enviado') =>
-  (t.deps.db.prepare('SELECT COUNT(*) n FROM alertas_enviados WHERE tipo=? AND status=?').get(tipo, status) as any).n
+const contar = async (t: Awaited<ReturnType<typeof subir>>, tipo: string, status = 'enviado') => {
+  const { rows } = await t.deps.db.query<{ n: number }>(
+    'SELECT COUNT(*) n FROM alertas_enviados WHERE tipo=? AND status=?',
+    [tipo, status],
+  )
+  return Number(rows[0].n)
+}
 
 describe('agendador', () => {
   let t: Awaited<ReturnType<typeof subir>>
@@ -21,7 +26,8 @@ describe('agendador', () => {
   })
   after(() => t.fechar())
   beforeEach(async () => {
-    t.deps.db.exec('DELETE FROM alertas_enviados; DELETE FROM preferencias;')
+    await t.deps.db.query('DELETE FROM alertas_enviados')
+    await t.deps.db.query('DELETE FROM preferencias')
     t.mailer.enviados.length = 0
     t.mailer.falhar = false
     t.weather.falhar = false
@@ -48,9 +54,9 @@ describe('agendador', () => {
   it('previsão diária: falha de e-mail registra "falhou" e não repete antes de 10 min', async () => {
     t.mailer.falhar = true
     assert.equal(await processarDiarias(t.deps, as0630), 0)
-    assert.equal(contar(t, 'previsao_diaria', 'falhou'), 1)
+    assert.equal(await contar(t, 'previsao_diaria', 'falhou'), 1)
     assert.equal(await processarDiarias(t.deps, new Date(as0630.getTime() + 60_000)), 0)
-    assert.equal(contar(t, 'previsao_diaria', 'falhou'), 1)
+    assert.equal(await contar(t, 'previsao_diaria', 'falhou'), 1)
     t.mailer.falhar = false
     assert.equal(await processarDiarias(t.deps, new Date(as0630.getTime() + 11 * 60_000)), 1)
   })
@@ -58,7 +64,10 @@ describe('agendador', () => {
   it('previsão diária: API do tempo fora registra falha com motivo', async () => {
     t.weather.falhar = true
     await processarDiarias(t.deps, as0630)
-    const row = t.deps.db.prepare("SELECT status, erro FROM alertas_enviados").get() as any
+    const { rows } = await t.deps.db.query<{ status: string; erro: string }>(
+      'SELECT status, erro FROM alertas_enviados',
+    )
+    const row = rows[0]
     assert.equal(row.status, 'falhou')
     assert.match(row.erro, /api fora/)
     assert.equal(t.mailer.enviados.length, 0)
@@ -67,8 +76,8 @@ describe('agendador', () => {
   it('chuva forte: dispara acima do limiar e não repete em 12h', async () => {
     t.weather.cenario = { chuvaPico: 30 }
     assert.equal(await processarAlertas(t.deps, as0630), 1)
-    assert.equal(contar(t, 'chuva_forte'), 1)
-    assert.equal(contar(t, 'geada'), 0)
+    assert.equal(await contar(t, 'chuva_forte'), 1)
+    assert.equal(await contar(t, 'geada'), 0)
     assert.equal(await processarAlertas(t.deps, new Date(as0630.getTime() + 30 * 60_000)), 0)
     assert.equal(await processarAlertas(t.deps, new Date(as0630.getTime() + 13 * 3600_000)), 1)
   })

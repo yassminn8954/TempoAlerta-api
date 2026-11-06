@@ -1,11 +1,14 @@
 import type { CidadeRow, DB, PreferenciaRow } from '../db.js'
 import { HttpError } from '../errors.js'
 
-export function cidadeDoUsuario(db: DB, usuarioId: number, cidadeId: number) {
-  const c = db.prepare('SELECT * FROM cidades WHERE id = ?').get(cidadeId) as CidadeRow | undefined
-  const p = db
-    .prepare('SELECT * FROM preferencias WHERE usuario_id = ? AND cidade_id = ?')
-    .get(usuarioId, cidadeId) as PreferenciaRow | undefined
+export async function cidadeDoUsuario(db: DB, usuarioId: number, cidadeId: number) {
+  const { rows: cidades } = await db.query<CidadeRow>('SELECT * FROM cidades WHERE id = ?', [cidadeId])
+  const { rows: preferencias } = await db.query<PreferenciaRow>(
+    'SELECT * FROM preferencias WHERE usuario_id = ? AND cidade_id = ?',
+    [usuarioId, cidadeId],
+  )
+  const c = cidades[0]
+  const p = preferencias[0]
   if (!c || !p) throw new HttpError(404, 'Cidade não encontrada para este usuário')
   return { cidade: c, pref: p }
 }

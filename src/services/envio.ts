@@ -4,11 +4,13 @@ import { partesLocais } from '../tz.js'
 import type { Mailer } from './mailer.js'
 import type { Mensagem } from './mensagens.js'
 import type { WeatherClient } from './openMeteo.js'
+import type { TelegramNotifier } from './telegram.js'
 
 export interface Deps {
   db: DB
   weather: WeatherClient
   mailer: Mailer
+  telegram?: TelegramNotifier
 }
 
 /** Envia o e-mail e grava o resultado em alertas_enviados (enviado ou falhou). */
@@ -20,21 +22,35 @@ export async function enviarERegistrar(
   msg: Mensagem,
   agora: Date,
 ): Promise<{ id: number; status: 'enviado' | 'falhou' }> {
-  let status: 'enviado' | 'falhou' = 'enviado'
-  let erro: string | null = null
+  let algumEnviado = false
+  const erros: string[] = []
   try {
     await deps.mailer.enviar(u.email, msg.assunto, msg.texto, msg.html)
   } catch (e) {
-    status = 'falhou'
-    erro = (e as Error).message
+    erros.push(`E-mail: ${(e as Error).message}`)
   }
-  const info = deps.db
-    .prepare(
+  if (u.telegram_chat_id) {
+    if (deps.telegram) {
+      try {
+        await deps.telegram.sendMessage(u.telegram_chat_id, `${msg.assunto}\n\n${msg.texto}`)
+        algumEnviado = true
+      } catch (e) {
+        erros.push(`Telegram: ${(e as Error).message}`)
+      }
+    } else {
+      erros.push('Telegram: envio não configurado no servidor')
+    }
+  }
+  if (!erros.some((erro) => erro.startsWith('E-mail:'))) {
+    algumEnviado = true
+  }
+  const status: 'enviado' | 'falhou' = algumEnviado ? 'enviado' : 'falhou'
+  const erro = erros.length ? erros.join('; ') : null
+  const result = await deps.db.query<{ id: number }>(
       `INSERT INTO alertas_enviados
          (usuario_id, cidade_id, tipo, mensagem, dados_json, data_ref, enviado_em, status, erro)
-       VALUES (?,?,?,?,?,?,?,?,?)`,
-    )
-    .run(
+       VALUES (?,?,?,?,?,?,?,?,?) RETURNING id`,
+      [
       u.id,
       c.id,
       tipo,
@@ -44,11 +60,12 @@ export async function enviarERegistrar(
       agora.toISOString(),
       status,
       erro,
+      ],
     )
-  return { id: Number(info.lastInsertRowid), status }
+  return { id: Number(result.rows[0].id), status }
 }
 
-export function registrarFalhaSemEnvio(
+export async function registrarFalhaSemEnvio(
   deps: Deps,
   u: UsuarioRow,
   c: CidadeRow,
@@ -56,13 +73,11 @@ export function registrarFalhaSemEnvio(
   motivo: string,
   agora: Date,
 ) {
-  deps.db
-    .prepare(
+  await deps.db.query(
       `INSERT INTO alertas_enviados
          (usuario_id, cidade_id, tipo, mensagem, dados_json, data_ref, enviado_em, status, erro)
-       VALUES (?,?,?,?,NULL,?,?,'falhou',?)`,
-    )
-    .run(
+       VALUES (?,?,?, ?,NULL,?,?,'falhou',?)`,
+      [
       u.id,
       c.id,
       tipo,
@@ -70,5 +85,6 @@ export function registrarFalhaSemEnvio(
       partesLocais(agora, env.tz).data,
       agora.toISOString(),
       motivo,
+      ],
     )
 }

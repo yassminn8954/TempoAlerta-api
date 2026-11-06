@@ -8,7 +8,9 @@ export const env = {
   corsOrigin: (process.env.CORS_ORIGIN ?? 'http://localhost:8443,http://localhost:5173')
     .split(',')
     .map((s) => s.trim()),
-  dbPath: process.env.DB_PATH ?? './data/tempoalerta.db',
+  databaseUrl: process.env.DATABASE_URL ?? '',
+  telegramBotToken: process.env.TELEGRAM_BOT_TOKEN ?? '',
+  telegramBotUsername: (process.env.TELEGRAM_BOT_USERNAME ?? 'TempoAlertaBot').replace(/^@/, ''),
   tz: process.env.TZ_APP ?? 'America/Sao_Paulo',
   schedulerOn: process.env.SCHEDULER !== 'off',
   mailMode: (process.env.MAIL_MODE ?? 'log') as 'log' | 'smtp',

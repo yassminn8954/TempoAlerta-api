@@ -1,9 +1,10 @@
 import type { AddressInfo } from 'node:net'
 import { createApp } from '../src/app.js'
-import { openDb } from '../src/db.js'
+import { openTestDb } from '../src/db.js'
 import type { Deps } from '../src/services/envio.js'
 import type { Mailer } from '../src/services/mailer.js'
 import type { CidadeBusca, Previsao, WeatherClient } from '../src/services/openMeteo.js'
+import type { TelegramNotifier } from '../src/services/telegram.js'
 
 export interface Cenario {
   chuvaPico?: number // mm/h no pico
@@ -59,10 +60,18 @@ export class MailerFake implements Mailer {
   }
 }
 
+export class TelegramFake implements TelegramNotifier {
+  enviados: { chatId: string; texto: string }[] = []
+  async sendMessage(chatId: string, texto: string) {
+    this.enviados.push({ chatId, texto })
+  }
+}
+
 export async function subir() {
   const weather = new WeatherFake()
   const mailer = new MailerFake()
-  const deps: Deps = { db: openDb(':memory:'), weather, mailer }
+  const telegram = new TelegramFake()
+  const deps: Deps = { db: openTestDb(), weather, mailer, telegram }
   const server = createApp(deps).listen(0)
   const base = `http://localhost:${(server.address() as AddressInfo).port}/api`
 
@@ -86,5 +95,20 @@ export async function subir() {
   const campinas = { nome: 'Campinas', estado: 'SP', latitude: -22.9, longitude: -47.06 }
   const holambra = { nome: 'Holambra', estado: 'SP', latitude: -22.63, longitude: -47.05 }
 
-  return { deps, weather, mailer, api, novoUsuario, campinas, holambra, fechar: () => server.close() }
+  return {
+    deps,
+    weather,
+    mailer,
+    telegram,
+    api,
+    novoUsuario,
+    campinas,
+    holambra,
+    fechar: async () => {
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      )
+      await deps.db.close()
+    },
+  }
 }

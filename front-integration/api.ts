@@ -106,4 +106,8 @@ export const api = {
     req<{ itens: Alerta[]; total: number; pagina: number; limite: number }>('GET', `/alertas${qs(f)}`),
   alerta: (id: number) => req<Alerta & { dados: Record<string, unknown> | null; destinatario: string }>('GET', `/alertas/${id}`),
   enviarTeste: (cidadeId: number, tipo: Tipo) => req<{ id: number; status: string }>('POST', '/alertas/teste', { cidadeId, tipo }),
+
+  telegramStatus: () => req<{ vinculado: boolean; bot_username: string }>('GET', '/telegram/status'),
+  criarVinculoTelegram: () => req<{ url: string; expira_em: string }>('POST', '/telegram/vinculo'),
+  desvincularTelegram: () => req<void>('DELETE', '/telegram/vinculo'),
 }

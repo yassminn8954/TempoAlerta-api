@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { after, before, describe, it } from 'node:test'
 import { subir } from './helpers.js'
+import { env } from '../src/env.js'
+import { processarUpdateTelegram } from '../src/services/telegram.js'
 
 describe('API', () => {
   let t: Awaited<ReturnType<typeof subir>>
@@ -108,6 +110,50 @@ describe('API', () => {
     const r = await t.api('GET', '/cidades/busca?q=camp', undefined, u.token)
     assert.equal(r.body[0].uf, 'SP')
     assert.equal((await t.api('GET', '/cidades/busca?q=c', undefined, u.token)).status, 400)
+  })
+
+  it('vincula Telegram com link de uso único e envia notificações para a conversa', async () => {
+    const u = await t.novoUsuario()
+    const statusInicial = await t.api('GET', '/telegram/status', undefined, u.token)
+    assert.equal(statusInicial.body.vinculado, false)
+
+    const linkResp = await t.api('POST', '/telegram/vinculo', undefined, u.token)
+    if (!env.telegramBotToken) {
+      assert.equal(linkResp.status, 503)
+      return
+    }
+    assert.equal(linkResp.status, 201)
+    const link = new URL(linkResp.body.url)
+    const codigo = link.searchParams.get('start')
+    assert.ok(codigo)
+
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = async () => new Response(JSON.stringify({ ok: true, result: true }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })
+    try {
+      await processarUpdateTelegram(t.deps.db, 'test-token', {
+        update_id: 1,
+        message: { text: `/start ${codigo}`, chat: { id: 987654321 } },
+      })
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+
+    assert.equal((await t.api('GET', '/telegram/status', undefined, u.token)).body.vinculado, true)
+    const cidade = (await t.api('POST', '/cidades', t.campinas, u.token)).body
+    const teste = await t.api(
+      'POST',
+      '/alertas/teste',
+      { cidadeId: cidade.id, tipo: 'previsao_diaria' },
+      u.token,
+    )
+    assert.equal(teste.body.status, 'enviado')
+    assert.equal(t.telegram.enviados.at(-1)?.chatId, '987654321')
+
+    assert.equal((await t.api('DELETE', '/telegram/vinculo', undefined, u.token)).status, 204)
+    assert.equal((await t.api('GET', '/telegram/status', undefined, u.token)).body.vinculado, false)
   })
 
   it('histórico: teste de envio, filtros, detalhe e isolamento entre usuários', async () => {

@@ -26,15 +26,14 @@ export function cidadesRoutes({ db, weather }: Deps) {
     res.json(await weather.buscarCidades(q))
   })
 
-  r.get('/', (req, res) => {
-    const rows = db
-      .prepare(
+  r.get('/', async (req, res) => {
+    const { rows } = await db.query<CidadeRow & PreferenciaRow>(
         `SELECT c.*, p.horario_envio, p.receber_previsao_diaria, p.alerta_chuva_forte, p.alerta_geada,
                 p.limiar_chuva_mm, p.limiar_geada_c, p.principal
          FROM preferencias p JOIN cidades c ON c.id = p.cidade_id
          WHERE p.usuario_id = ? ORDER BY p.principal DESC, c.nome`,
+        [req.userId],
       )
-      .all(req.userId) as (CidadeRow & PreferenciaRow)[]
     res.json(
       rows.map((x) => ({
         ...paraCidade(x),
@@ -44,64 +43,68 @@ export function cidadesRoutes({ db, weather }: Deps) {
     )
   })
 
-  r.post('/', (req, res) => {
+  r.post('/', async (req, res) => {
     const b = novaCidade.parse(req.body)
     const lat = Math.round(b.latitude * 1e4) / 1e4
     const lon = Math.round(b.longitude * 1e4) / 1e4
 
-    const criar = db.transaction(() => {
-      db.prepare('INSERT OR IGNORE INTO cidades (nome, estado, latitude, longitude) VALUES (?,?,?,?)').run(
-        b.nome,
-        b.estado ?? null,
-        lat,
-        lon,
+    const cidadeId = await db.transaction(async (tx) => {
+      await tx.query(
+        'INSERT INTO cidades (nome, estado, latitude, longitude) VALUES (?,?,?,?) ON CONFLICT (latitude, longitude) DO NOTHING',
+        [b.nome, b.estado ?? null, lat, lon],
       )
-      const c = db
-        .prepare('SELECT * FROM cidades WHERE latitude = ? AND longitude = ?')
-        .get(lat, lon) as CidadeRow
-      const ja = db
-        .prepare('SELECT 1 FROM preferencias WHERE usuario_id = ? AND cidade_id = ?')
-        .get(req.userId, c.id)
+      const { rows: cidades } = await tx.query<CidadeRow>(
+        'SELECT * FROM cidades WHERE latitude = ? AND longitude = ?',
+        [lat, lon],
+      )
+      const c = cidades[0]
+      if (!c) throw new Error('A cidade não foi criada no banco')
+      const { rowCount: ja } = await tx.query(
+        'SELECT 1 FROM preferencias WHERE usuario_id = ? AND cidade_id = ?',
+        [req.userId, c.id],
+      )
       if (ja) throw new HttpError(409, 'Você já acompanha esta cidade')
-      const temPrincipal = db
-        .prepare('SELECT 1 FROM preferencias WHERE usuario_id = ? AND principal = 1')
-        .get(req.userId)
-      db.prepare(
+      const { rowCount: temPrincipal } = await tx.query(
+        'SELECT 1 FROM preferencias WHERE usuario_id = ? AND principal = TRUE',
+        [req.userId],
+      )
+      await tx.query(
         'INSERT INTO preferencias (usuario_id, cidade_id, horario_envio, principal) VALUES (?,?,?,?)',
-      ).run(req.userId, c.id, b.horario_envio ?? '06:00', temPrincipal ? 0 : 1)
+        [req.userId, c.id, b.horario_envio ?? '06:00', !temPrincipal],
+      )
       return c.id
     })
 
-    const cidadeId = criar()
-    const { cidade, pref } = cidadeDoUsuario(db, req.userId!, cidadeId)
+    const { cidade, pref } = await cidadeDoUsuario(db, req.userId!, cidadeId)
     res.status(201).json({ ...paraCidade(cidade), preferencia: paraPreferencia(pref), principal: !!pref.principal })
   })
 
-  r.patch('/:cidadeId/principal', (req, res) => {
+  r.patch('/:cidadeId/principal', async (req, res) => {
     const id = z.coerce.number().int().parse(req.params.cidadeId)
-    cidadeDoUsuario(db, req.userId!, id)
-    db.transaction(() => {
-      db.prepare('UPDATE preferencias SET principal = 0 WHERE usuario_id = ?').run(req.userId)
-      db.prepare('UPDATE preferencias SET principal = 1 WHERE usuario_id = ? AND cidade_id = ?').run(
-        req.userId,
-        id,
+    await cidadeDoUsuario(db, req.userId!, id)
+    await db.transaction(async (tx) => {
+      await tx.query('UPDATE preferencias SET principal = FALSE WHERE usuario_id = ?', [req.userId])
+      await tx.query(
+        'UPDATE preferencias SET principal = TRUE WHERE usuario_id = ? AND cidade_id = ?',
+        [req.userId, id],
       )
-    })()
+    })
     res.json({ ok: true })
   })
 
-  r.delete('/:cidadeId', (req, res) => {
+  r.delete('/:cidadeId', async (req, res) => {
     const id = z.coerce.number().int().parse(req.params.cidadeId)
-    const { pref } = cidadeDoUsuario(db, req.userId!, id)
-    db.transaction(() => {
-      db.prepare('DELETE FROM preferencias WHERE id = ?').run(pref.id)
+    const { pref } = await cidadeDoUsuario(db, req.userId!, id)
+    await db.transaction(async (tx) => {
+      await tx.query('DELETE FROM preferencias WHERE id = ?', [pref.id])
       if (pref.principal) {
-        db.prepare(
-          `UPDATE preferencias SET principal = 1
+        await tx.query(
+          `UPDATE preferencias SET principal = TRUE
            WHERE id = (SELECT id FROM preferencias WHERE usuario_id = ? ORDER BY id LIMIT 1)`,
-        ).run(req.userId)
+          [req.userId],
+        )
       }
-    })()
+    })
     res.status(204).end()
   })
 

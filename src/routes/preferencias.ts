@@ -20,36 +20,35 @@ export function preferenciasRoutes({ db }: Deps) {
   const r = Router()
   r.use(auth)
 
-  r.get('/', (req, res) => {
-    const rows = db
-      .prepare(
+  r.get('/', async (req, res) => {
+    const { rows } = await db.query<CidadeRow & PreferenciaRow>(
         `SELECT c.*, p.horario_envio, p.receber_previsao_diaria, p.alerta_chuva_forte, p.alerta_geada,
                 p.limiar_chuva_mm, p.limiar_geada_c, p.principal
          FROM preferencias p JOIN cidades c ON c.id = p.cidade_id WHERE p.usuario_id = ?
          ORDER BY p.principal DESC, c.nome`,
+        [req.userId],
       )
-      .all(req.userId) as (CidadeRow & PreferenciaRow)[]
     res.json(rows.map((x) => ({ cidade: paraCidade(x), ...paraPreferencia(x) })))
   })
 
-  r.get('/:cidadeId', (req, res) => {
-    const { cidade, pref } = cidadeDoUsuario(db, req.userId!, z.coerce.number().int().parse(req.params.cidadeId))
+  r.get('/:cidadeId', async (req, res) => {
+    const { cidade, pref } = await cidadeDoUsuario(db, req.userId!, z.coerce.number().int().parse(req.params.cidadeId))
     res.json({ cidade: paraCidade(cidade), ...paraPreferencia(pref) })
   })
 
-  r.put('/:cidadeId', (req, res) => {
+  r.put('/:cidadeId', async (req, res) => {
     const id = z.coerce.number().int().parse(req.params.cidadeId)
     const b = schema.parse(req.body)
-    const { pref } = cidadeDoUsuario(db, req.userId!, id)
+    const { pref } = await cidadeDoUsuario(db, req.userId!, id)
 
     const campos = Object.entries(b).filter(([, v]) => v !== undefined)
     if (campos.length) {
       // nomes de coluna vêm das chaves do schema zod (whitelist), nunca do usuário
       const set = campos.map(([k]) => `${k} = ?`).join(', ')
-      const vals = campos.map(([, v]) => (typeof v === 'boolean' ? Number(v) : v))
-      db.prepare(`UPDATE preferencias SET ${set} WHERE id = ?`).run(...vals, pref.id)
+      const vals = campos.map(([, v]) => v)
+      await db.query(`UPDATE preferencias SET ${set} WHERE id = ?`, [...vals, pref.id])
     }
-    const { cidade, pref: nova } = cidadeDoUsuario(db, req.userId!, id)
+    const { cidade, pref: nova } = await cidadeDoUsuario(db, req.userId!, id)
     res.json({ cidade: paraCidade(cidade), ...paraPreferencia(nova) })
   })
 

@@ -7,6 +7,7 @@ import { authRoutes } from './routes/auth.js'
 import { cidadesRoutes } from './routes/cidades.js'
 import { preferenciasRoutes } from './routes/preferencias.js'
 import { previsaoRoutes } from './routes/previsao.js'
+import { telegramRoutes } from './routes/telegram.js'
 import type { Deps } from './services/envio.js'
 
 export function createApp(deps: Deps) {
@@ -20,6 +21,7 @@ export function createApp(deps: Deps) {
   app.use('/api/preferencias', preferenciasRoutes(deps))
   app.use('/api/previsao', previsaoRoutes(deps))
   app.use('/api/alertas', alertasRoutes(deps))
+  app.use('/api/telegram', telegramRoutes(deps.db))
 
   app.use((_req, res) => res.status(404).json({ erro: 'Rota não encontrada' }))
   app.use(erros)
