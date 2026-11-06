@@ -85,6 +85,12 @@ CREATE TABLE IF NOT EXISTS alertas_enviados (
 );
 CREATE INDEX IF NOT EXISTS ix_alertas_usuario ON alertas_enviados (usuario_id, enviado_em DESC);
 CREATE INDEX IF NOT EXISTS ix_alertas_dedupe ON alertas_enviados (usuario_id, cidade_id, tipo, enviado_em);
+
+CREATE TABLE IF NOT EXISTS previsoes_cache (
+  chave       TEXT PRIMARY KEY,
+  previsao    JSONB NOT NULL,
+  salvo_em    TIMESTAMPTZ NOT NULL
+);
 `
 
 function postgresDb(query: (sql: string, values?: unknown[]) => Promise<{ rows: QueryResultRow[]; rowCount: number | null }>, pool: Pool, client?: PoolClient): DB {
@@ -170,6 +176,9 @@ export function openTestDb(): DB {
     );
     CREATE INDEX ix_alertas_usuario ON alertas_enviados (usuario_id, enviado_em DESC);
     CREATE INDEX ix_alertas_dedupe ON alertas_enviados (usuario_id, cidade_id, tipo, enviado_em);
+    CREATE TABLE previsoes_cache (
+      chave TEXT PRIMARY KEY, previsao TEXT NOT NULL, salvo_em TEXT NOT NULL
+    );
   `)
   const db: DB = {
     async query<T extends QueryResultRow>(sql: string, values: unknown[] = []) {

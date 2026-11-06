@@ -1,4 +1,5 @@
 import { env } from '../env.js'
+import type { DB } from '../db.js'
 
 export interface CidadeBusca {
   nome: string
@@ -55,7 +56,14 @@ const UF: Record<string, string> = {
 }
 
 const TTL_MS = 10 * 60 * 1000
-const RATE_LIMIT_COOLDOWN_MS = 60 * 1000
+const MAX_STALE_MS = 24 * 60 * 60 * 1000
+const RATE_LIMIT_COOLDOWN_MS = 5 * 60 * 1000
+
+interface CacheEntry {
+  ate: number
+  salvoEm: number
+  dado: Previsao
+}
 
 class WeatherRateLimitError extends WeatherError {
   constructor(public retryAfterMs: number) {
@@ -71,9 +79,34 @@ function retryAfterMs(value: string | null) {
 }
 
 export class OpenMeteoClient implements WeatherClient {
-  private cache = new Map<string, { ate: number; dado: Previsao }>()
+  private cache = new Map<string, CacheEntry>()
   private previsoesEmAndamento = new Map<string, Promise<Previsao>>()
   private previsoesBloqueadasAte = 0
+
+  constructor(private readonly db?: DB) {}
+
+  private async cachePara(key: string): Promise<CacheEntry | undefined> {
+    const memoria = this.cache.get(key)
+    if (memoria) return memoria
+    if (!this.db) return undefined
+
+    const { rows } = await this.db.query<{ previsao: Previsao | string; salvo_em: string | Date }>(
+      'SELECT previsao, salvo_em FROM previsoes_cache WHERE chave = ?',
+      [key],
+    )
+    const row = rows[0]
+    if (!row) return undefined
+
+    const dado = typeof row.previsao === 'string' ? JSON.parse(row.previsao) as Previsao : row.previsao
+    const salvoEm = Date.parse(String(row.salvo_em))
+    const entry = { ate: salvoEm + TTL_MS, salvoEm, dado }
+    this.cache.set(key, entry)
+    return entry
+  }
+
+  private cacheUsavel(entry: CacheEntry | undefined, now: number): entry is CacheEntry {
+    return !!entry && now - entry.salvoEm <= MAX_STALE_MS
+  }
 
   private async getJson(url: string): Promise<any> {
     let res: Response
@@ -104,10 +137,11 @@ export class OpenMeteoClient implements WeatherClient {
 
   async previsao(lat: number, lon: number): Promise<Previsao> {
     const key = `${lat.toFixed(2)},${lon.toFixed(2)}`
-    const hit = this.cache.get(key)
-    if (hit && hit.ate > Date.now()) return hit.dado
-    if (this.previsoesBloqueadasAte > Date.now()) {
-      if (hit) return hit.dado
+    const hit = await this.cachePara(key)
+    const now = Date.now()
+    if (hit && hit.ate > now) return hit.dado
+    if (this.previsoesBloqueadasAte > now) {
+      if (this.cacheUsavel(hit, now)) return hit.dado
       throw new WeatherError('Open-Meteo está limitando consultas temporariamente; tente novamente em instantes')
     }
 
@@ -127,7 +161,7 @@ export class OpenMeteoClient implements WeatherClient {
     lat: number,
     lon: number,
     key: string,
-    hit: { ate: number; dado: Previsao } | undefined,
+    hit: CacheEntry | undefined,
   ): Promise<Previsao> {
     const url =
       'https://api.open-meteo.com/v1/forecast?' +
@@ -173,13 +207,25 @@ export class OpenMeteoClient implements WeatherClient {
         })),
         atualizado_em: new Date().toISOString(),
       }
-      this.cache.set(key, { ate: Date.now() + TTL_MS, dado })
+      const salvoEm = Date.now()
+      this.cache.set(key, { ate: salvoEm + TTL_MS, salvoEm, dado })
+      if (this.db) {
+        try {
+          await this.db.query(
+            `INSERT INTO previsoes_cache (chave, previsao, salvo_em) VALUES (?, ?, ?)
+             ON CONFLICT (chave) DO UPDATE SET previsao = excluded.previsao, salvo_em = excluded.salvo_em`,
+            [key, JSON.stringify(dado), new Date(salvoEm).toISOString()],
+          )
+        } catch (error) {
+          console.error('[weather cache] não foi possível persistir previsão:', error)
+        }
+      }
       return dado
     } catch (error) {
       if (error instanceof WeatherRateLimitError) {
         this.previsoesBloqueadasAte = Date.now() + error.retryAfterMs
       }
-      if (hit) return hit.dado
+      if (this.cacheUsavel(hit, Date.now())) return hit.dado
       throw error
     }
   }

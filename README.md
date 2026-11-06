@@ -60,8 +60,11 @@ frontend, sem barra no final.
 | `cidades` | id, nome, estado, pais, latitude, longitude (única por lat/lon) |
 | `preferencias` | id, usuario_id → usuarios, cidade_id → cidades, horario_envio, receber_previsao_diaria, alerta_chuva_forte, alerta_geada, limiar_chuva_mm, limiar_geada_c, principal |
 | `alertas_enviados` | id, usuario_id, cidade_id, tipo, mensagem, dados_json, data_ref, enviado_em, status, erro |
+| `previsoes_cache` | chave por coordenadas, previsão JSON e data de atualização; compartilhada entre reinícios |
 
 `preferencias` é a tabela de ligação usuário × cidade (N:N) e guarda as configurações de cada cidade.
+
+Previsões bem-sucedidas ficam em cache por 10 minutos no PostgreSQL. Se a Open-Meteo estiver indisponível ou responder com limite de consultas (429), a API pode servir a última previsão salva por até 24 horas. A data exibida continua sendo a da consulta original.
 
 ## Endpoints (`/api`, JSON; exceto cadastro/login precisam de `Authorization: Bearer <token>`)
 
@@ -93,6 +96,7 @@ frontend, sem barra no final.
   chuva forte se algum horário ≥ `limiar_chuva_mm` (mm/h); geada se a temperatura mínima ≤ `limiar_geada_c` (padrão 3 °C, como no front).
   Não repete o mesmo alerta (usuário+cidade+tipo) por 12 h.
 - Falha de e-mail ou da API do tempo vira registro `falhou` (aparece no histórico), com nova tentativa após 10 min e no máx. 3 por dia.
+- `SCHEDULER=off` desliga os envios automáticos; o padrão é ligado.
 
 ## Ligar o front
 

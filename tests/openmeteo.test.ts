@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { afterEach, describe, it } from 'node:test'
+import { openTestDb } from '../src/db.js'
 import { OpenMeteoClient, WeatherError } from '../src/services/openMeteo.js'
 
 const realFetch = globalThis.fetch
@@ -78,6 +79,29 @@ describe('OpenMeteoClient (fetch simulado no formato documentado da API)', () =>
     assert.equal(await c.previsao(-22.9, -47.06), original)
     assert.equal(await c.previsao(-22.9, -47.06), original)
     assert.equal(chamadas, 2)
+  })
+
+  it('reutiliza a previsão persistida após reiniciar o cliente e receber 429', async () => {
+    let now = realNow()
+    Date.now = () => now
+    let chamadas = 0
+    globalThis.fetch = (async () => {
+      chamadas++
+      return chamadas === 1
+        ? json(forecast)
+        : new Response('', { status: 429, headers: { 'Retry-After': '60' } })
+    }) as any
+
+    const db = openTestDb()
+    try {
+      const primeira = await new OpenMeteoClient(db).previsao(-22.9, -47.06)
+      now += 11 * 60 * 1000
+      const recuperada = await new OpenMeteoClient(db).previsao(-22.9, -47.06)
+      assert.deepEqual(recuperada, primeira)
+      assert.equal(chamadas, 2)
+    } finally {
+      await db.close()
+    }
   })
 
   it('não repete consultas sem cache durante o cooldown de limite', async () => {

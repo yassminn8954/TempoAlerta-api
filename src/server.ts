@@ -12,10 +12,11 @@ if (process.env.NODE_ENV === 'production' && env.jwtSecret.startsWith('dev-secre
 
 const db = await openDb(env.databaseUrl)
 const telegram = env.telegramBotToken ? criarTelegram(env.telegramBotToken) : undefined
-const deps = { db, weather: new OpenMeteoClient(), mailer: criarMailer(), telegram }
+const deps = { db, weather: new OpenMeteoClient(db), mailer: criarMailer(), telegram }
 const app = createApp(deps)
 
 if (env.schedulerOn) iniciarScheduler(deps)
+else console.log('Agendador desligado (SCHEDULER=off)')
 if (env.telegramBotToken) void iniciarPollingTelegram(db, env.telegramBotToken)
 
 app.listen(env.port, () =>

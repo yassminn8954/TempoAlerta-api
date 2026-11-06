@@ -17,7 +17,7 @@ export const env = {
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN ?? '',
   telegramBotUsername: (process.env.TELEGRAM_BOT_USERNAME ?? 'TempoAlertaBot').replace(/^@/, ''),
   tz: process.env.TZ_APP ?? 'America/Sao_Paulo',
-  schedulerOn: process.env.SCHEDULER !== 'off',
+  schedulerOn: process.env.SCHEDULER?.trim().toLowerCase() !== 'off',
   mailMode: mailMode as 'off' | 'smtp',
   smtp: {
     host: process.env.SMTP_HOST ?? '',
