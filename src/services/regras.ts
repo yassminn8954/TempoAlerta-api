@@ -1,4 +1,4 @@
-import type { Previsao } from './openMeteo.js'
+import type { Previsao } from './weather.js'
 
 export interface EventoChuva {
   pico_mm: number

@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from 'express'
 import { ZodError } from 'zod'
 import { HttpError } from '../errors.js'
-import { WeatherError } from '../services/openMeteo.js'
+import { WeatherError } from '../services/weather.js'
 
 export function erros(err: any, _req: Request, res: Response, _next: NextFunction) {
   if (err instanceof ZodError) {

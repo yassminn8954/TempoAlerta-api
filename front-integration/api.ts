@@ -25,14 +25,14 @@ export interface Alerta {
 
 export interface Dia {
   data: string; dia_semana: string; max: number; min: number
-  chuva_mm: number; prob_chuva: number; codigo: number; descricao: string
+  chuva_mm: number; prob_chuva: number | null; codigo: number; descricao: string
 }
 export type AlertaAtivo =
   | { tipo: 'chuva_forte'; pico_mm: number; hora_pico: string; total_24h_mm: number; limiar_chuva_mm: number }
   | { tipo: 'geada'; minima: number; hora_minima: string; limiar_geada_c: number }
 export interface PrevisaoResp {
   cidade: { id: number; nome: string; estado: string | null }
-  atual: { temperatura: number; sensacao: number; umidade: number; vento_kmh: number; chuva_mm: number; codigo: number; descricao: string }
+  atual: { temperatura: number; umidade: number; vento_kmh: number; chuva_mm: number; codigo: number; descricao: string }
   hoje: Dia
   dias: Dia[]
   status_geral: { risco_geada_48h: boolean; menor_minima: { valor: number; data: string; dia_semana: string } }

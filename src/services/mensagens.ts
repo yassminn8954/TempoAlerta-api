@@ -1,5 +1,5 @@
 import type { CidadeRow, UsuarioRow } from '../db.js'
-import { descricaoClima, type Previsao } from './openMeteo.js'
+import { descricaoClima, type Previsao } from './weather.js'
 import type { EventoChuva, EventoGeada } from './regras.js'
 
 export interface Mensagem {
@@ -20,7 +20,7 @@ function html(titulo: string, linhas: string[], conselhos: string[] = []) {
 <h2 style="color:#0ea5e9">TempoAlerta</h2><h3>${esc(titulo)}</h3>
 ${linhas.map((l) => `<p>${esc(l)}</p>`).join('\n')}
 ${conselhos.length ? `<ul>${conselhos.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>` : ''}
-<p style="color:#64748b;font-size:12px">Dados meteorológicos: Open-Meteo.</p></div>`
+<p style="color:#64748b;font-size:12px">Dados meteorológicos: MET Norway.</p></div>`
 }
 
 export function mensagemDiaria(u: UsuarioRow, c: CidadeRow, p: Previsao): Mensagem {
@@ -29,7 +29,7 @@ export function mensagemDiaria(u: UsuarioRow, c: CidadeRow, p: Previsao): Mensag
   const linhas = [
     `Bom dia, ${primeiroNome(u.nome)}! Previsão de hoje para ${local(c)}:`,
     `${desc}. Máxima de ${r0(hoje.max)}°C e mínima de ${r0(hoje.min)}°C (agora: ${r0(p.atual.temperatura)}°C).`,
-    `Chance de chuva: ${r0(hoje.prob_chuva)}% (${hoje.chuva_mm} mm previstos). Vento de ${r0(p.atual.vento_kmh)} km/h e umidade de ${r0(p.atual.umidade)}%.`,
+    `Precipitação prevista: ${hoje.chuva_mm} mm. Vento de ${r0(p.atual.vento_kmh)} km/h e umidade de ${r0(p.atual.umidade)}%.`,
   ]
   return {
     assunto: `Previsão de hoje em ${local(c)}`,

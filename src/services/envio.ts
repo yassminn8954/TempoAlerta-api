@@ -3,7 +3,7 @@ import type { CidadeRow, DB, Tipo, UsuarioRow } from '../db.js'
 import { partesLocais } from '../tz.js'
 import type { Mailer } from './mailer.js'
 import type { Mensagem } from './mensagens.js'
-import type { WeatherClient } from './openMeteo.js'
+import type { WeatherClient } from './weather.js'
 import type { TelegramNotifier } from './telegram.js'
 
 export interface Deps {

@@ -20,7 +20,7 @@ export function cidadesRoutes({ db, weather }: Deps) {
   const r = Router()
   r.use(auth)
 
-  // Busca (geocodificação Open-Meteo) para o autocomplete do onboarding
+  // Busca cidades usando Nominatim (OpenStreetMap).
   r.get('/busca', async (req, res) => {
     const { q } = z.object({ q: z.string().trim().min(2).max(80) }).parse(req.query)
     res.json(await weather.buscarCidades(q))

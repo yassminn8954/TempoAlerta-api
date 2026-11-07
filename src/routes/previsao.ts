@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { auth } from '../middleware/auth.js'
 import { cidadeDoUsuario, paraCidade } from '../services/consultas.js'
 import type { Deps } from '../services/envio.js'
-import { descricaoClima } from '../services/openMeteo.js'
+import { descricaoClima } from '../services/weather.js'
 import { chuvaForte, geada } from '../services/regras.js'
 
 const SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
@@ -45,7 +45,7 @@ export function previsaoRoutes({ db, weather }: Deps) {
       },
       alertas_ativos: alertasAtivos, // alimenta o banner do dashboard
       atualizado_em: p.atualizado_em,
-      fonte: 'Open-Meteo',
+      fonte: 'MET Norway',
     })
   })
 

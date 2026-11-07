@@ -3,7 +3,7 @@ import { createApp } from '../src/app.js'
 import { openTestDb } from '../src/db.js'
 import type { Deps } from '../src/services/envio.js'
 import type { Mailer } from '../src/services/mailer.js'
-import type { CidadeBusca, Previsao, WeatherClient } from '../src/services/openMeteo.js'
+import type { CidadeBusca, Previsao, WeatherClient } from '../src/services/weather.js'
 import type { TelegramNotifier } from '../src/services/telegram.js'
 
 export interface Cenario {
@@ -28,11 +28,11 @@ export function previsaoFake(c: Cenario = {}): Previsao {
     max: 27,
     min: i === 0 ? (c.minima ?? 15) : 16,
     chuva_mm: 1,
-    prob_chuva: 20,
+    prob_chuva: null,
     codigo: 2,
   }))
   return {
-    atual: { hora: '2026-10-26T06:30', temperatura: 19, sensacao: 19, umidade: 70, vento_kmh: 10, chuva_mm: 0, codigo: 2 },
+    atual: { hora: '2026-10-26T06:30', temperatura: 19, umidade: 70, vento_kmh: 10, chuva_mm: 0, codigo: 2 },
     dias,
     horas,
     atualizado_em: new Date().toISOString(),

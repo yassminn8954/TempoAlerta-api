@@ -1,6 +1,6 @@
 # TempoAlerta — API (back-end)
 
-Node 20+ · TypeScript · Express 5 · PostgreSQL · Open-Meteo (previsão + geocodificação) · node-cron · Nodemailer
+Node 20+ · TypeScript · Express 5 · PostgreSQL · MET Norway (previsão) · OpenStreetMap Nominatim (busca de cidades) · node-cron · Nodemailer
 
 ## Rodar
 
@@ -13,7 +13,7 @@ npm test                  # testes (banco SQLite em memória)
 
 As implementações Fake ficam somente nos testes; a aplicação real não usa dados ou entregas simuladas.
 
-Crie um banco PostgreSQL pelo pgAdmin, por exemplo `tempoalerta`, e configure `DATABASE_URL` no `.env`:
+Crie um banco PostgreSQL pelo pgAdmin, por exemplo `tempoalerta`, e configure `DATABASE_URL` no `.env`. A API meteorológica e a busca de cidades não exigem chave:
 
 ```env
 DATABASE_URL=postgresql://postgres:SUA_SENHA@localhost:5432/tempoalerta
@@ -61,10 +61,13 @@ frontend, sem barra no final.
 | `preferencias` | id, usuario_id → usuarios, cidade_id → cidades, horario_envio, receber_previsao_diaria, alerta_chuva_forte, alerta_geada, limiar_chuva_mm, limiar_geada_c, principal |
 | `alertas_enviados` | id, usuario_id, cidade_id, tipo, mensagem, dados_json, data_ref, enviado_em, status, erro |
 | `previsoes_cache` | chave por coordenadas, previsão JSON e data de atualização; compartilhada entre reinícios |
+| `cidades_busca_cache` | consulta e resultados de cidades; cache compartilhado de 24 horas |
 
 `preferencias` é a tabela de ligação usuário × cidade (N:N) e guarda as configurações de cada cidade.
 
-Previsões bem-sucedidas ficam em cache por 10 minutos no PostgreSQL. Se a Open-Meteo estiver indisponível ou responder com limite de consultas (429), a API pode servir a última previsão salva por até 24 horas. A data exibida continua sendo a da consulta original.
+Previsões do MET Norway ficam em cache por 10 minutos no PostgreSQL. Se o provedor estiver indisponível ou limitar consultas, a API pode servir a última previsão salva por até 24 horas. A data exibida continua sendo a da consulta original. A previsão diária mostra acumulado de chuva em milímetros; este provedor não fornece probabilidade de chuva nesse endpoint.
+
+O serviço meteorológico usa a API de localização do [MET Norway](https://api.met.no/weatherapi/locationforecast/2.0/documentation). A busca explícita de cidades usa [OpenStreetMap Nominatim](https://operations.osmfoundation.org/policies/nominatim/), com cache e limite de uma requisição por segundo; não fazemos chamadas de autocomplete a cada tecla digitada.
 
 ## Endpoints (`/api`, JSON; exceto cadastro/login precisam de `Authorization: Bearer <token>`)
 
@@ -73,7 +76,7 @@ Previsões bem-sucedidas ficam em cache por 10 minutos no PostgreSQL. Se a Open-
 | POST | `/auth/cadastro` | `{nome, email, senha(min 8), perfil}` → `{token, usuario}` |
 | POST | `/auth/login` | `{email, senha}` → `{token, usuario}` |
 | GET | `/auth/me` | usuário logado |
-| GET | `/cidades/busca?q=camp` | autocomplete (Open-Meteo Geocoding, só Brasil) |
+| GET | `/cidades/busca?q=camp` | busca explícita de cidades (OpenStreetMap Nominatim, Brasil) |
 | GET | `/cidades` | cidades do usuário + preferência de cada uma |
 | POST | `/cidades` | `{nome, estado, latitude, longitude, horario_envio?}` (a 1ª vira principal) |
 | PATCH | `/cidades/:id/principal` | define cidade principal |
@@ -111,4 +114,4 @@ Para o Render, `render.yaml` espera que `DATABASE_URL` (PostgreSQL acessível pe
 
 - Senhas com bcrypt; JWT de 7 dias; consultas SQL parametrizadas.
 - Para produção: `NODE_ENV=production` exige `JWT_SECRET` definido. Sugestões: rate limit no login (`express-rate-limit`) e HTTPS.
-- Open-Meteo gratuito é para uso não comercial; para uso comercial veja a licença deles.
+- Exiba a atribuição MET Norway para previsões e OpenStreetMap para resultados de busca de cidades.

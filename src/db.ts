@@ -91,6 +91,12 @@ CREATE TABLE IF NOT EXISTS previsoes_cache (
   previsao    JSONB NOT NULL,
   salvo_em    TIMESTAMPTZ NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS cidades_busca_cache (
+  consulta    TEXT PRIMARY KEY,
+  resultados  JSONB NOT NULL,
+  buscado_em  TIMESTAMPTZ NOT NULL
+);
 `
 
 function postgresDb(query: (sql: string, values?: unknown[]) => Promise<{ rows: QueryResultRow[]; rowCount: number | null }>, pool: Pool, client?: PoolClient): DB {
@@ -178,6 +184,9 @@ export function openTestDb(): DB {
     CREATE INDEX ix_alertas_dedupe ON alertas_enviados (usuario_id, cidade_id, tipo, enviado_em);
     CREATE TABLE previsoes_cache (
       chave TEXT PRIMARY KEY, previsao TEXT NOT NULL, salvo_em TEXT NOT NULL
+    );
+    CREATE TABLE cidades_busca_cache (
+      consulta TEXT PRIMARY KEY, resultados TEXT NOT NULL, buscado_em TEXT NOT NULL
     );
   `)
   const db: DB = {
