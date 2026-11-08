@@ -3,7 +3,7 @@ import { z } from 'zod'
 import type { CidadeRow, PreferenciaRow } from '../db.js'
 import { HttpError } from '../errors.js'
 import { auth } from '../middleware/auth.js'
-import { cidadeDoUsuario, paraCidade, paraPreferencia } from '../services/consultas.js'
+import { cidadeDoUsuario, horariosDaPreferencia, paraCidade, paraPreferencia } from '../services/consultas.js'
 import type { Deps } from '../services/envio.js'
 
 const horario = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use o formato HH:MM')
@@ -27,19 +27,20 @@ export function cidadesRoutes({ db, weather }: Deps) {
   })
 
   r.get('/', async (req, res) => {
-    const { rows } = await db.query<CidadeRow & PreferenciaRow>(
-        `SELECT c.*, p.horario_envio, p.receber_previsao_diaria, p.alerta_chuva_forte, p.alerta_geada,
-                p.limiar_chuva_mm, p.limiar_geada_c, p.principal
+    const { rows } = await db.query<CidadeRow & PreferenciaRow & { preferencia_id: number }>(
+        `SELECT c.*, p.id AS preferencia_id, p.horario_envio, p.horario_envio_manha, p.horario_envio_tarde,
+                p.receber_previsao_diaria, p.receber_previsao_manha, p.receber_previsao_tarde,
+                p.alerta_chuva_forte, p.alerta_geada, p.limiar_chuva_mm, p.limiar_geada_c, p.principal
          FROM preferencias p JOIN cidades c ON c.id = p.cidade_id
          WHERE p.usuario_id = ? ORDER BY p.principal DESC, c.nome`,
         [req.userId],
       )
     res.json(
-      rows.map((x) => ({
+      await Promise.all(rows.map(async (x) => ({
         ...paraCidade(x),
-        preferencia: paraPreferencia(x),
+        preferencia: paraPreferencia(x, await horariosDaPreferencia(db, x.preferencia_id)),
         principal: !!x.principal,
-      })),
+      }))),
     )
   })
 
@@ -68,15 +69,29 @@ export function cidadesRoutes({ db, weather }: Deps) {
         'SELECT 1 FROM preferencias WHERE usuario_id = ? AND principal = TRUE',
         [req.userId],
       )
-      await tx.query(
-        'INSERT INTO preferencias (usuario_id, cidade_id, horario_envio, principal) VALUES (?,?,?,?)',
-        [req.userId, c.id, b.horario_envio ?? '06:00', !temPrincipal],
+      const { rows: preferencias } = await tx.query<{ id: number }>(
+        `INSERT INTO preferencias
+           (usuario_id, cidade_id, horario_envio, horario_envio_manha, principal)
+         VALUES (?,?,?,?,?) RETURNING id`,
+        [req.userId, c.id, b.horario_envio ?? '06:00', b.horario_envio ?? '06:00', !temPrincipal],
       )
+      const horarioManha = b.horario_envio ?? '06:00'
+      const horarios = [...new Set([horarioManha, '16:00'])].sort()
+      for (const horario of horarios) {
+        await tx.query(
+          'INSERT INTO preferencia_horarios (preferencia_id, horario) VALUES (?,?)',
+          [preferencias[0].id, horario],
+        )
+      }
       return c.id
     })
 
     const { cidade, pref } = await cidadeDoUsuario(db, req.userId!, cidadeId)
-    res.status(201).json({ ...paraCidade(cidade), preferencia: paraPreferencia(pref), principal: !!pref.principal })
+    res.status(201).json({
+      ...paraCidade(cidade),
+      preferencia: paraPreferencia(pref, await horariosDaPreferencia(db, pref.id)),
+      principal: !!pref.principal,
+    })
   })
 
   r.patch('/:cidadeId/principal', async (req, res) => {

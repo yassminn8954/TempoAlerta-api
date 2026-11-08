@@ -23,6 +23,15 @@ Troque `postgres` pelo usuário PostgreSQL correto. Se a senha tiver caracteres 
 
 Não há envio de e-mail simulado. `MAIL_MODE=off` desativa e-mail; para entrega real configure `MAIL_MODE=smtp`, `SMTP_HOST`, `SMTP_USER` e `SMTP_PASS`. O Telegram funciona como canal independente quando o bot está configurado e a conta está vinculada.
 
+Se o navegador mostrar `ERR_CONNECTION_REFUSED` para `localhost:3333`, inicie
+a API em um terminal na pasta `tempoalerta-api` com `npm run dev`. Para receber
+notificações, configure ao menos um canal real: SMTP (`MAIL_MODE=smtp` e as
+variáveis SMTP) ou Telegram (`TELEGRAM_BOT_TOKEN` e conta vinculada em
+Preferências). O modo padrão `MAIL_MODE=off` não envia e-mail; no Render, o
+Blueprint também deixa e-mail desligado até você configurar SMTP no ambiente.
+Os envios automáticos ainda exigem `SCHEDULER=on`, preferência habilitada e
+horário dentro da janela de envio. O histórico detalha a falha por canal.
+
 ## Telegram
 
 Configure o token do bot somente no `.env` do back-end. A API inicia o polling do bot quando `TELEGRAM_BOT_TOKEN` está definido; `TELEGRAM_BOT_USERNAME` deve corresponder ao username criado no BotFather (sem `@`). Os testes de envio usam a previsão atual: chuva/geada só são enviados se atingirem o limiar cadastrado.
@@ -34,38 +43,7 @@ Com o usuário autenticado no front:
 3. O usuário toca em **Start** no Telegram. O vínculo é confirmado pelo bot; depois, previsão diária, chuva forte e geada também são enviados para essa conversa.
 4. Para remover o vínculo, chame `api.desvincularTelegram()`.
 
-O chat é associado à conta autenticada, não se deve pedir o `chat_id` manualmente. Não execute mais de uma instância com polling do mesmo bot ao mesmo tempo.
-
-## WhatsApp Cloud API (Meta)
-
-O WhatsApp é integrado pela Cloud API oficial da Meta. Configure as variáveis
-`WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_BUSINESS_NUMBER`,
-`WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET` e `WHATSAPP_TEMPLATE_NAME` no
-ambiente do back-end (no Render, em **Environment**). O número comercial deve
-estar em formato internacional, somente dígitos. Nunca coloque token ou App
-Secret no front-end ou no repositório.
-
-No Meta for Developers, adicione o produto WhatsApp, configure o webhook
-`https://<domínio-da-api>/api/whatsapp/webhook`, use o mesmo
-`WHATSAPP_VERIFY_TOKEN` e assine o campo `messages`. O endpoint valida
-`X-Hub-Signature-256` usando `WHATSAPP_APP_SECRET`; portanto, mantenha HTTPS e
-configure o App Secret correto. O status de configuração fica em
-`GET /api/whatsapp/status`.
-
-Crie e aprove na Meta um template da categoria **Utility**, idioma `pt_BR`,
-com `{{1}}` no corpo, por exemplo `TempoAlerta: {{1}}`. Configure o nome exato
-em `WHATSAPP_TEMPLATE_NAME` e o idioma em `WHATSAPP_TEMPLATE_LANGUAGE`.
-Alertas iniciados pelo agendador usam esse template porque podem ocorrer fora
-da janela de atendimento de 24 horas. Mensagens de texto simples são usadas
-somente para responder a uma conversa iniciada pela pessoa, como a confirmação
-do vínculo.
-
-Na tela de preferências, **Conectar** abre uma conversa pré-preenchida com um
-código descartável, válido por 10 minutos. A pessoa precisa enviar essa
-mensagem ao número oficial para vincular e consentir com o canal. `STOP`,
-`PARAR`, `SAIR` ou `CANCELAR` desvinculam imediatamente; também é possível
-desconectar nas configurações. O telefone fica associado à conta para entrega
-de alertas. Respeite as políticas de opt-in e mensagens da Meta.
+O chat é associado à conta autenticada, não se deve pedir o `chat_id` manualmente. Se esse Telegram já estiver associado a outra conta, confirmar um novo link válido transfere o vínculo para a conta autenticada. Não execute mais de uma instância com polling do mesmo bot ao mesmo tempo.
 
 ## Publicar no Render (demonstração)
 
@@ -87,11 +65,11 @@ frontend, sem barra no final.
 
 | tabela | colunas principais |
 |---|---|
-| `usuarios` | id, nome, email (único), senha_hash, perfil, telegram_chat_id, whatsapp_phone, criado_em |
-| `whatsapp_vinculos` | códigos de vínculo de uso único, com expiração |
+| `usuarios` | id, nome, email (único), senha_hash, perfil, criado_em |
 | `cidades` | id, nome, estado, pais, latitude, longitude (única por lat/lon) |
-| `preferencias` | id, usuario_id → usuarios, cidade_id → cidades, horario_envio, receber_previsao_diaria, alerta_chuva_forte, alerta_geada, limiar_chuva_mm, limiar_geada_c, principal |
-| `alertas_enviados` | id, usuario_id, cidade_id, tipo, mensagem, dados_json, data_ref, enviado_em, status, erro |
+| `preferencias` | id, usuario_id → usuarios, cidade_id → cidades, configurações de alertas e principal |
+| `preferencia_horarios` | preferencia_id → preferencias, horário escolhido para uma previsão diária (até 4 por cidade) |
+| `alertas_enviados` | id, usuario_id, cidade_id, tipo, mensagem, dados_json, data_ref, horario_agendado, turno_agendado, enviado_em, status, erro |
 | `previsoes_cache` | cache persistente das previsões dos provedores meteorológicos |
 | `cidades_busca_cache` | consulta e resultados de cidades; cache compartilhado de 24 horas |
 
@@ -113,7 +91,7 @@ O serviço meteorológico usa a API de localização do [MET Norway](https://api
 | POST | `/cidades` | `{nome, estado, latitude, longitude, horario_envio?}` (a 1ª vira principal) |
 | PATCH | `/cidades/:id/principal` | define cidade principal |
 | DELETE | `/cidades/:id` | remove da lista do usuário |
-| GET/PUT | `/preferencias/:cidadeId` | horário, toggles e limiares (PUT aceita campos parciais) |
+| GET/PUT | `/preferencias/:cidadeId` | até 4 horários em `horarios_previsao`, demais toggles e limiares (PUT aceita campos parciais) |
 | GET | `/previsao/:cidadeId` | atual + 7 dias + `status_geral` + `alertas_ativos` (banner) |
 | GET | `/alertas` | histórico: `cidadeId, tipo, periodo(dias), busca, pagina, limite` |
 | GET | `/alertas/:id` | detalhe + dados que originaram o alerta |
@@ -121,20 +99,16 @@ O serviço meteorológico usa a API de localização do [MET Norway](https://api
 | GET | `/telegram/status` | informa se o Telegram está vinculado |
 | POST | `/telegram/vinculo` | gera link de vinculação, válido por 10 minutos |
 | DELETE | `/telegram/vinculo` | remove o vínculo com o Telegram |
-| GET | `/whatsapp/status` | informa configuração e vínculo WhatsApp |
-| POST | `/whatsapp/vinculo` | gera link com código de vínculo de 10 minutos |
-| DELETE | `/whatsapp/vinculo` | remove o vínculo com o WhatsApp |
-| GET/POST | `/whatsapp/webhook` | verificação e recebimento autenticado de mensagens da Meta |
 
 `tipo`: `previsao_diaria` · `chuva_forte` · `geada`
 
 ## Como os envios funcionam (`src/services/scheduler.ts`)
 
-- **Previsão diária** — a cada minuto, envia para quem está no `horario_envio` (fuso `America/Sao_Paulo`). Janela de 1 h caso o servidor fique fora do ar; no máx. 1 por cidade/dia.
+- **Previsões diárias** — cada cidade pode ter até 4 horários independentes, iniciando por 06:00 e 16:00. A migração preserva os horários configurados anteriormente. A mensagem se ajusta ao horário escolhido (madrugada, manhã, tarde ou noite) e é enviada no minuto exato no fuso `America/Sao_Paulo`; alterações no mesmo dia são respeitadas. Se o horário passar enquanto o agendador estiver indisponível, não envia atrasado; uma falha de entrega permite novas tentativas com intervalo de 10 min, no máximo 3 por horário/dia.
 - **Chuva forte / geada** — a cada 30 min, olha as próximas 24 h por cidade:
   chuva forte se algum horário ≥ `limiar_chuva_mm` (mm/h); geada se a temperatura mínima ≤ `limiar_geada_c` (padrão 3 °C, como no front).
   Não repete o mesmo alerta (usuário+cidade+tipo) por 12 h.
-- Falha de e-mail ou da API do tempo vira registro `falhou` (aparece no histórico), com nova tentativa após 10 min e no máx. 3 por dia.
+- Falha de um canal ou da API do tempo vira registro `falhou` (aparece no histórico); para cada horário diário, as tentativas ocorrem a partir do horário escolhido, com intervalo de 10 min e no máximo 3.
 - `SCHEDULER=off` desliga os envios automáticos; o padrão é ligado.
 
 ## Ligar o front

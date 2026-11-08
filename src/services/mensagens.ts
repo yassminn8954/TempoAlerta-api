@@ -23,19 +23,60 @@ ${conselhos.length ? `<ul>${conselhos.map((c) => `<li>${esc(c)}</li>`).join('')}
 <p style="color:#64748b;font-size:12px">Fontes de previsão: MET Norway e Open-Meteo (contingência).</p></div>`
 }
 
-export function mensagemDiaria(u: UsuarioRow, c: CidadeRow, p: Previsao): Mensagem {
+export type PeriodoDiario = 'madrugada' | 'manha' | 'tarde' | 'noite'
+
+export function periodoDoHorario(horario: string): PeriodoDiario {
+  const hora = Number(horario.slice(0, 2))
+  if (hora >= 5 && hora < 12) return 'manha'
+  if (hora >= 12 && hora < 18) return 'tarde'
+  if (hora >= 18) return 'noite'
+  return 'madrugada'
+}
+
+export function mensagemDiaria(
+  u: UsuarioRow,
+  c: CidadeRow,
+  p: Previsao,
+  periodo: PeriodoDiario = 'manha',
+  horarioAgendado?: string,
+): Mensagem {
   const hoje = p.dias[0]
   const desc = descricaoClima(hoje.codigo)
+  const periodoTexto = {
+    madrugada: 'da madrugada',
+    manha: 'da manhã',
+    tarde: 'da tarde',
+    noite: 'da noite',
+  }[periodo]
+  const saudacao = {
+    madrugada: `Olá, ${primeiroNome(u.nome)}! Confira a atualização do tempo para ${local(c)}.`,
+    manha: `Bom dia, ${primeiroNome(u.nome)}! Aqui está o panorama de hoje para ${local(c)}.`,
+    tarde: `Boa tarde, ${primeiroNome(u.nome)}! Confira como fica o restante do dia em ${local(c)}.`,
+    noite: `Boa noite, ${primeiroNome(u.nome)}! Veja as condições para as próximas horas em ${local(c)}.`,
+  }[periodo]
+  const titulo = {
+    madrugada: 'ATUALIZAÇÃO DO TEMPO',
+    manha: 'PREVISÃO DO DIA',
+    tarde: 'RESTANTE DO DIA',
+    noite: 'TEMPO NESTA NOITE',
+  }[periodo]
+  const descricao = {
+    madrugada: `${desc}. Hoje, a máxima será de ${r0(hoje.max)}°C e a mínima de ${r0(hoje.min)}°C.`,
+    manha: `${desc}. Máxima de ${r0(hoje.max)}°C e mínima de ${r0(hoje.min)}°C.`,
+    tarde: `${desc}. A máxima prevista é ${r0(hoje.max)}°C e a mínima é ${r0(hoje.min)}°C.`,
+    noite: `${desc}. Hoje, a máxima foi de ${r0(hoje.max)}°C e a mínima prevista é ${r0(hoje.min)}°C.`,
+  }[periodo]
   const linhas = [
-    `Bom dia, ${primeiroNome(u.nome)}! Previsão de hoje para ${local(c)}:`,
-    `${desc}. Máxima de ${r0(hoje.max)}°C e mínima de ${r0(hoje.min)}°C (agora: ${r0(p.atual.temperatura)}°C).`,
-    `Precipitação prevista: ${hoje.chuva_mm} mm. Vento de ${r0(p.atual.vento_kmh)} km/h e umidade de ${r0(p.atual.umidade)}%.`,
+    saudacao,
+    ...(horarioAgendado ? [`🕒 Atualização programada para ${horarioAgendado}.`] : []),
+    `☀️ ${titulo}\n${descricao}`,
+    `🌧 Chuva prevista hoje: ${hoje.chuva_mm} mm.\n🌡 Agora: ${r0(p.atual.temperatura)}°C  •  💨 Vento: ${r0(p.atual.vento_kmh)} km/h  •  💧 Umidade: ${r0(p.atual.umidade)}%.`,
   ]
   return {
-    assunto: `Previsão de hoje em ${local(c)}`,
+    assunto: `Previsão ${periodoTexto} em ${local(c)}`,
     texto: linhas.join('\n'),
-    html: html(`Previsão de hoje — ${local(c)}`, linhas),
-    dados: { dia: hoje, atual: p.atual },
+    html: html(`Previsão ${periodoTexto} — ${local(c)}`, linhas),
+    dados: { dia: hoje, atual: p.atual, periodo, horario_agendado: horarioAgendado },
   }
 }
 

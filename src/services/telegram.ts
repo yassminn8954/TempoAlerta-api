@@ -70,31 +70,34 @@ export async function processarUpdateTelegram(db: DB, token: string, update: Tel
     return
   }
 
-  const { rows } = await db.query<UsuarioRow>(
-    'SELECT u.* FROM telegram_vinculos v JOIN usuarios u ON u.id = v.usuario_id WHERE v.codigo = ? AND v.expira_em > ?',
-    [codigo, Date.now()],
-  )
-  const usuario = rows[0]
-  if (!usuario) {
+  const vinculo = await db.transaction(async (tx) => {
+    const claimed = await tx.query<{ usuario_id: number }>(
+      'DELETE FROM telegram_vinculos WHERE codigo = ? AND expira_em > ? RETURNING usuario_id',
+      [codigo, Date.now()],
+    )
+    const usuarioId = claimed.rows[0]?.usuario_id
+    if (!usuarioId) return false
+
+    const chatId = String(message.chat.id)
+    await tx.query(
+      'UPDATE usuarios SET telegram_chat_id = NULL WHERE telegram_chat_id = ? OR id = ?',
+      [chatId, usuarioId],
+    )
+    await tx.query('UPDATE usuarios SET telegram_chat_id = ? WHERE id = ?', [chatId, usuarioId])
+    await tx.query('DELETE FROM telegram_vinculos WHERE usuario_id = ?', [usuarioId])
+    return true
+  })
+
+  if (!vinculo) {
     await responder(token, message.chat.id, 'Esse link expirou ou já foi usado. Gere um novo link no TempoAlerta.')
     return
   }
 
-  try {
-    await db.query('UPDATE usuarios SET telegram_chat_id = ? WHERE id = ?', [
-      String(message.chat.id),
-      usuario.id,
-    ])
-  } catch (error) {
-    if ((error as { code?: string }).code === '23505') {
-      await responder(token, message.chat.id, 'Esta conta do Telegram já está vinculada a outro usuário.')
-      return
-    }
-    throw error
-  }
-
-  await db.query('DELETE FROM telegram_vinculos WHERE usuario_id = ?', [usuario.id])
-  await responder(token, message.chat.id, 'Conta vinculada! Você receberá seus alertas do TempoAlerta por aqui.')
+  await responder(
+    token,
+    message.chat.id,
+    'Conta vinculada! Você receberá seus alertas do TempoAlerta por aqui. Se este Telegram estava vinculado a outra conta, o vínculo anterior foi substituído.',
+  )
 }
 
 export async function iniciarPollingTelegram(db: DB, token: string) {

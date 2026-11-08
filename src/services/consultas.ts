@@ -13,9 +13,22 @@ export async function cidadeDoUsuario(db: DB, usuarioId: number, cidadeId: numbe
   return { cidade: c, pref: p }
 }
 
-export const paraPreferencia = (p: PreferenciaRow) => ({
-  horario_envio: p.horario_envio,
+export async function horariosDaPreferencia(db: DB, preferenciaId: number) {
+  const { rows } = await db.query<{ horario: string }>(
+    'SELECT horario FROM preferencia_horarios WHERE preferencia_id = ? ORDER BY horario',
+    [preferenciaId],
+  )
+  return rows.map((row) => row.horario)
+}
+
+export const paraPreferencia = (p: PreferenciaRow, horarios_previsao: string[] = []) => ({
+  horario_envio: p.horario_envio_manha ?? p.horario_envio,
+  horario_envio_manha: p.horario_envio_manha ?? p.horario_envio,
+  horario_envio_tarde: p.horario_envio_tarde ?? '16:00',
+  horarios_previsao,
   receber_previsao_diaria: !!p.receber_previsao_diaria,
+  receber_previsao_manha: !!(p.receber_previsao_manha ?? p.receber_previsao_diaria),
+  receber_previsao_tarde: !!p.receber_previsao_tarde,
   alerta_chuva_forte: !!p.alerta_chuva_forte,
   alerta_geada: !!p.alerta_geada,
   limiar_chuva_mm: p.limiar_chuva_mm,

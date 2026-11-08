@@ -11,6 +11,14 @@ describe('API', () => {
   })
   after(() => t.fechar())
 
+  it('expõe o estado do agendador no endpoint de saúde', async () => {
+    const response = await t.api('GET', '/saude')
+    assert.equal(response.body.ok, true)
+    assert.equal(typeof response.body.agendador.ativo, 'boolean')
+    assert.equal(typeof response.body.agendador.fuso_horario, 'string')
+    assert.equal(response.body.agendador.ultima_verificacao_diaria, null)
+  })
+
   it('cadastro, login e /me; rejeita duplicado e senha errada', async () => {
     const r = await t.api('POST', '/auth/cadastro', { nome: 'Ana Lima', email: 'ANA@x.com', senha: '12345678', perfil: 'organizador_eventos' })
     assert.equal(r.status, 201)
@@ -34,21 +42,6 @@ describe('API', () => {
     assert.ok(r.body.detalhes.length >= 2)
     assert.equal((await t.api('GET', '/cidades')).status, 401)
     assert.equal((await t.api('GET', '/cidades', undefined, 'lixo')).status, 401)
-  })
-
-  it('envia alertas ao WhatsApp vinculado junto aos outros canais', async () => {
-    const u = await t.novoUsuario()
-    const cidade = (await t.api('POST', '/cidades', t.campinas, u.token)).body
-    await t.deps.db.query('UPDATE usuarios SET whatsapp_phone = ? WHERE id = ?', ['5511888887777', u.id])
-    const teste = await t.api(
-      'POST',
-      '/alertas/teste',
-      { cidadeId: cidade.id, tipo: 'previsao_diaria' },
-      u.token,
-    )
-    assert.equal(teste.body.status, 'enviado')
-    assert.equal(t.whatsapp.enviados.at(-1)?.telefone, '5511888887777')
-    assert.match(t.whatsapp.enviados.at(-1)?.texto ?? '', /Previsão de hoje/)
   })
 
   it('cidades: primeira vira principal, trocar principal, remover promove outra', async () => {
@@ -95,6 +88,23 @@ describe('API', () => {
     // outro usuário não enxerga
     const outro = await t.novoUsuario()
     assert.equal((await t.api('GET', `/preferencias/${c.id}`, undefined, outro.token)).status, 404)
+  })
+
+  it('preferências: salva até quatro horários distintos', async () => {
+    const u = await t.novoUsuario()
+    const c = (await t.api('POST', '/cidades', t.campinas, u.token)).body
+    const atualizada = await t.api('PUT', `/preferencias/${c.id}`, {
+      horarios_previsao: ['06:30', '12:00', '17:45', '21:00'],
+    }, u.token)
+    assert.deepEqual(atualizada.body.horarios_previsao, ['06:30', '12:00', '17:45', '21:00'])
+    assert.equal(atualizada.body.horario_envio, '06:30')
+    assert.equal(atualizada.body.receber_previsao_diaria, true)
+    assert.equal((await t.api('PUT', `/preferencias/${c.id}`, {
+      horarios_previsao: ['06:00', '06:00'],
+    }, u.token)).status, 400)
+    assert.equal((await t.api('PUT', `/preferencias/${c.id}`, {
+      horarios_previsao: ['05:00', '09:00', '13:00', '17:00', '21:00'],
+    }, u.token)).status, 400)
   })
 
   it('previsão: formato para o dashboard e alertas ativos pelos limiares do usuário', async () => {
@@ -171,6 +181,43 @@ describe('API', () => {
     assert.equal((await t.api('GET', '/telegram/status', undefined, u.token)).body.vinculado, false)
   })
 
+  it('transfere o Telegram para a conta que confirmou um novo vínculo autenticado', async () => {
+    const contaAntiga = await t.novoUsuario()
+    const contaNova = await t.novoUsuario()
+    const chatId = '987654321'
+    await t.deps.db.query('UPDATE usuarios SET telegram_chat_id = ? WHERE id = ?', [chatId, contaAntiga.id])
+    const codigo = 'codigo-transferencia-unico'
+    await t.deps.db.query(
+      'INSERT INTO telegram_vinculos (codigo, usuario_id, expira_em) VALUES (?,?,?)',
+      [codigo, contaNova.id, Date.now() + 60_000],
+    )
+
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = async () => new Response(JSON.stringify({ ok: true, result: true }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })
+    try {
+      await processarUpdateTelegram(t.deps.db, 'test-token', {
+        update_id: 2,
+        message: { text: `/start ${codigo}`, chat: { id: Number(chatId) } },
+      })
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+
+    const antiga = await t.deps.db.query<{ telegram_chat_id: string | null }>(
+      'SELECT telegram_chat_id FROM usuarios WHERE id = ?',
+      [contaAntiga.id],
+    )
+    const nova = await t.deps.db.query<{ telegram_chat_id: string | null }>(
+      'SELECT telegram_chat_id FROM usuarios WHERE id = ?',
+      [contaNova.id],
+    )
+    assert.equal(antiga.rows[0].telegram_chat_id, null)
+    assert.equal(nova.rows[0].telegram_chat_id, chatId)
+  })
+
   it('não registra como enviado quando não há canal real configurado', async () => {
     const u = await t.novoUsuario()
     const cidade = (await t.api('POST', '/cidades', t.campinas, u.token)).body
@@ -184,6 +231,8 @@ describe('API', () => {
         u.token,
       )
       assert.equal(resultado.body.status, 'falhou')
+      assert.match(resultado.body.erro, /E-mail: canal desativado/)
+      assert.match(resultado.body.erro, /Telegram:/)
     } finally {
       t.deps.mailer = mailer
     }
