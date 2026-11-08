@@ -20,11 +20,18 @@ CREATE TABLE IF NOT EXISTS usuarios (
   senha_hash  TEXT NOT NULL,
   perfil      TEXT NOT NULL CHECK (perfil IN ('produtor_rural','organizador_eventos')),
   telegram_chat_id TEXT UNIQUE,
+  whatsapp_phone TEXT UNIQUE,
   criado_em   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS telegram_chat_id TEXT UNIQUE;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS whatsapp_phone TEXT UNIQUE;
 
 CREATE TABLE IF NOT EXISTS telegram_vinculos (
+  codigo       TEXT PRIMARY KEY,
+  usuario_id   INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  expira_em    BIGINT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS whatsapp_vinculos (
   codigo       TEXT PRIMARY KEY,
   usuario_id   INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
   expira_em    BIGINT NOT NULL
@@ -153,9 +160,14 @@ export function openTestDb(): DB {
       id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL, email TEXT NOT NULL UNIQUE,
       senha_hash TEXT NOT NULL, perfil TEXT NOT NULL CHECK (perfil IN ('produtor_rural','organizador_eventos')),
       telegram_chat_id TEXT UNIQUE,
+      whatsapp_phone TEXT UNIQUE,
       criado_em TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
     );
     CREATE TABLE telegram_vinculos (
+      codigo TEXT PRIMARY KEY, usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+      expira_em INTEGER NOT NULL
+    );
+    CREATE TABLE whatsapp_vinculos (
       codigo TEXT PRIMARY KEY, usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
       expira_em INTEGER NOT NULL
     );
@@ -226,6 +238,7 @@ export interface UsuarioRow {
   senha_hash: string
   perfil: 'produtor_rural' | 'organizador_eventos'
   telegram_chat_id?: string | null
+  whatsapp_phone?: string | null
   criado_em: string | Date
 }
 export interface CidadeRow {

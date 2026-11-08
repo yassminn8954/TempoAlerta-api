@@ -5,12 +5,14 @@ import type { Mailer } from './mailer.js'
 import type { Mensagem } from './mensagens.js'
 import type { WeatherClient } from './weather.js'
 import type { TelegramNotifier } from './telegram.js'
+import type { WhatsAppNotifier } from './whatsapp.js'
 
 export interface Deps {
   db: DB
   weather: WeatherClient
   mailer?: Mailer
   telegram?: TelegramNotifier
+  whatsapp?: WhatsAppNotifier
 }
 
 /** Envia o e-mail e grava o resultado em alertas_enviados (enviado ou falhou). */
@@ -44,6 +46,18 @@ export async function enviarERegistrar(
       }
     } else {
       erros.push('Telegram: envio não configurado no servidor')
+    }
+  }
+  if (u.whatsapp_phone) {
+    if (deps.whatsapp) {
+      try {
+        await deps.whatsapp.sendMessage(u.whatsapp_phone, `${msg.assunto}\n\n${msg.texto}`)
+        algumEnviado = true
+      } catch (e) {
+        erros.push(`WhatsApp: ${(e as Error).message}`)
+      }
+    } else {
+      erros.push('WhatsApp: envio não configurado no servidor')
     }
   }
   const status: 'enviado' | 'falhou' = algumEnviado ? 'enviado' : 'falhou'

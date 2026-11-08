@@ -36,6 +36,21 @@ describe('API', () => {
     assert.equal((await t.api('GET', '/cidades', undefined, 'lixo')).status, 401)
   })
 
+  it('envia alertas ao WhatsApp vinculado junto aos outros canais', async () => {
+    const u = await t.novoUsuario()
+    const cidade = (await t.api('POST', '/cidades', t.campinas, u.token)).body
+    await t.deps.db.query('UPDATE usuarios SET whatsapp_phone = ? WHERE id = ?', ['5511888887777', u.id])
+    const teste = await t.api(
+      'POST',
+      '/alertas/teste',
+      { cidadeId: cidade.id, tipo: 'previsao_diaria' },
+      u.token,
+    )
+    assert.equal(teste.body.status, 'enviado')
+    assert.equal(t.whatsapp.enviados.at(-1)?.telefone, '5511888887777')
+    assert.match(t.whatsapp.enviados.at(-1)?.texto ?? '', /Previsão de hoje/)
+  })
+
   it('cidades: primeira vira principal, trocar principal, remover promove outra', async () => {
     const u = await t.novoUsuario()
     const a = await t.api('POST', '/cidades', t.campinas, u.token)

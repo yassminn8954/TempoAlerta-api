@@ -5,6 +5,7 @@ import type { Deps } from '../src/services/envio.js'
 import type { Mailer } from '../src/services/mailer.js'
 import type { CidadeBusca, Previsao, WeatherClient } from '../src/services/weather.js'
 import type { TelegramNotifier } from '../src/services/telegram.js'
+import type { WhatsAppNotifier } from '../src/services/whatsapp.js'
 
 export interface Cenario {
   chuvaPico?: number // mm/h no pico
@@ -68,11 +69,22 @@ export class TelegramFake implements TelegramNotifier {
   }
 }
 
+export class WhatsAppFake implements WhatsAppNotifier {
+  enviados: { telefone: string; texto: string }[] = []
+  async sendMessage(telefone: string, texto: string) {
+    this.enviados.push({ telefone, texto })
+  }
+  async sendText(telefone: string, texto: string) {
+    this.enviados.push({ telefone, texto })
+  }
+}
+
 export async function subir() {
   const weather = new WeatherFake()
   const mailer = new MailerFake()
   const telegram = new TelegramFake()
-  const deps: Deps = { db: openTestDb(), weather, mailer, telegram }
+  const whatsapp = new WhatsAppFake()
+  const deps: Deps = { db: openTestDb(), weather, mailer, telegram, whatsapp }
   const server = createApp(deps).listen(0)
   const base = `http://localhost:${(server.address() as AddressInfo).port}/api`
 
@@ -101,6 +113,7 @@ export async function subir() {
     weather,
     mailer,
     telegram,
+    whatsapp,
     api,
     novoUsuario,
     campinas,

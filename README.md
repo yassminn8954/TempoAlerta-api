@@ -36,6 +36,37 @@ Com o usuário autenticado no front:
 
 O chat é associado à conta autenticada, não se deve pedir o `chat_id` manualmente. Não execute mais de uma instância com polling do mesmo bot ao mesmo tempo.
 
+## WhatsApp Cloud API (Meta)
+
+O WhatsApp é integrado pela Cloud API oficial da Meta. Configure as variáveis
+`WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_BUSINESS_NUMBER`,
+`WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET` e `WHATSAPP_TEMPLATE_NAME` no
+ambiente do back-end (no Render, em **Environment**). O número comercial deve
+estar em formato internacional, somente dígitos. Nunca coloque token ou App
+Secret no front-end ou no repositório.
+
+No Meta for Developers, adicione o produto WhatsApp, configure o webhook
+`https://<domínio-da-api>/api/whatsapp/webhook`, use o mesmo
+`WHATSAPP_VERIFY_TOKEN` e assine o campo `messages`. O endpoint valida
+`X-Hub-Signature-256` usando `WHATSAPP_APP_SECRET`; portanto, mantenha HTTPS e
+configure o App Secret correto. O status de configuração fica em
+`GET /api/whatsapp/status`.
+
+Crie e aprove na Meta um template da categoria **Utility**, idioma `pt_BR`,
+com `{{1}}` no corpo, por exemplo `TempoAlerta: {{1}}`. Configure o nome exato
+em `WHATSAPP_TEMPLATE_NAME` e o idioma em `WHATSAPP_TEMPLATE_LANGUAGE`.
+Alertas iniciados pelo agendador usam esse template porque podem ocorrer fora
+da janela de atendimento de 24 horas. Mensagens de texto simples são usadas
+somente para responder a uma conversa iniciada pela pessoa, como a confirmação
+do vínculo.
+
+Na tela de preferências, **Conectar** abre uma conversa pré-preenchida com um
+código descartável, válido por 10 minutos. A pessoa precisa enviar essa
+mensagem ao número oficial para vincular e consentir com o canal. `STOP`,
+`PARAR`, `SAIR` ou `CANCELAR` desvinculam imediatamente; também é possível
+desconectar nas configurações. O telefone fica associado à conta para entrega
+de alertas. Respeite as políticas de opt-in e mensagens da Meta.
+
 ## Publicar no Render (demonstração)
 
 O `render.yaml` configura a API como Web Service gratuito. Envie as alterações
@@ -56,7 +87,8 @@ frontend, sem barra no final.
 
 | tabela | colunas principais |
 |---|---|
-| `usuarios` | id, nome, email (único), senha_hash, perfil, criado_em |
+| `usuarios` | id, nome, email (único), senha_hash, perfil, telegram_chat_id, whatsapp_phone, criado_em |
+| `whatsapp_vinculos` | códigos de vínculo de uso único, com expiração |
 | `cidades` | id, nome, estado, pais, latitude, longitude (única por lat/lon) |
 | `preferencias` | id, usuario_id → usuarios, cidade_id → cidades, horario_envio, receber_previsao_diaria, alerta_chuva_forte, alerta_geada, limiar_chuva_mm, limiar_geada_c, principal |
 | `alertas_enviados` | id, usuario_id, cidade_id, tipo, mensagem, dados_json, data_ref, enviado_em, status, erro |
@@ -89,6 +121,10 @@ O serviço meteorológico usa a API de localização do [MET Norway](https://api
 | GET | `/telegram/status` | informa se o Telegram está vinculado |
 | POST | `/telegram/vinculo` | gera link de vinculação, válido por 10 minutos |
 | DELETE | `/telegram/vinculo` | remove o vínculo com o Telegram |
+| GET | `/whatsapp/status` | informa configuração e vínculo WhatsApp |
+| POST | `/whatsapp/vinculo` | gera link com código de vínculo de 10 minutos |
+| DELETE | `/whatsapp/vinculo` | remove o vínculo com o WhatsApp |
+| GET/POST | `/whatsapp/webhook` | verificação e recebimento autenticado de mensagens da Meta |
 
 `tipo`: `previsao_diaria` · `chuva_forte` · `geada`
 
