@@ -20,7 +20,7 @@ const forecast = {
       {
         time: '2026-11-06T23:00:00Z',
         data: {
-          instant: { details: { air_temperature: 20, relative_humidity: 75, wind_speed: 2 } },
+          instant: { details: { air_temperature: 20, apparent_air_temperature: 19, relative_humidity: 75, wind_speed: 2 } },
           next_1_hours: { summary: { symbol_code: 'heavyrain' }, details: { precipitation_amount: 3 } },
         },
       },
@@ -57,6 +57,7 @@ describe('MetNorwayClient', () => {
     assert.match(userAgent, /TempoAlerta/)
     assert.equal(result.atual.hora, '2026-11-06T20:00')
     assert.equal(result.atual.temperatura, 20)
+    assert.equal(result.atual.sensacao, 19)
     assert.equal(result.atual.vento_kmh, 7.2)
     assert.equal(result.atual.codigo, 61)
     assert.equal(result.dias[0].chuva_mm, 3)
@@ -133,7 +134,7 @@ describe('MetNorwayClient', () => {
     }
   })
 
-  it('não repete chamadas durante cooldown de limite sem cache', async () => {
+  it('não repete chamadas aos provedores durante cooldown de limite sem cache', async () => {
     let chamadas = 0
     globalThis.fetch = (async () => {
       chamadas++
@@ -142,6 +143,49 @@ describe('MetNorwayClient', () => {
     const client = new MetNorwayClient()
     await assert.rejects(client.previsao(1, 1), WeatherError)
     await assert.rejects(client.previsao(1, 1), WeatherError)
-    assert.equal(chamadas, 1)
+    assert.equal(chamadas, 2)
+  })
+
+  it('usa Open-Meteo automaticamente se MET Norway estiver inacessível', async () => {
+    let chamadas = 0
+    globalThis.fetch = (async (input: string) => {
+      chamadas++
+      if (input.includes('api.met.no')) throw new TypeError('fetch failed')
+      assert.match(input, /api\.open-meteo\.com\/v1\/forecast/)
+      return json({
+        current: {
+          time: '2026-11-08T10:00',
+          temperature_2m: 21,
+          apparent_temperature: 22,
+          relative_humidity_2m: 65,
+          wind_speed_10m: 8,
+          precipitation: 0,
+          weather_code: 1,
+        },
+        hourly: {
+          time: ['2026-11-08T10:00'],
+          temperature_2m: [21],
+          precipitation: [0],
+          precipitation_probability: [10],
+        },
+        daily: {
+          time: ['2026-11-08'],
+          temperature_2m_max: [27],
+          temperature_2m_min: [17],
+          precipitation_sum: [0],
+          precipitation_probability_max: [10],
+          weather_code: [1],
+        },
+      })
+    }) as typeof fetch
+
+    const client = new MetNorwayClient()
+    const result = await client.previsao(-25.43, -49.27)
+    assert.equal(result.fonte, 'Open-Meteo (contingência)')
+    assert.equal(result.atual.temperatura, 21)
+    assert.equal(result.atual.sensacao, 22)
+    assert.equal(chamadas, 2)
+    assert.deepEqual(await client.previsao(-25.43, -49.27), result)
+    assert.equal(chamadas, 2)
   })
 })

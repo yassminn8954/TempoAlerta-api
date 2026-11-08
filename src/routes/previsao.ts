@@ -45,7 +45,7 @@ export function previsaoRoutes({ db, weather }: Deps) {
       },
       alertas_ativos: alertasAtivos, // alimenta o banner do dashboard
       atualizado_em: p.atualizado_em,
-      fonte: 'MET Norway',
+      fonte: p.fonte,
     })
   })
 

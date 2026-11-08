@@ -20,7 +20,7 @@ function html(titulo: string, linhas: string[], conselhos: string[] = []) {
 <h2 style="color:#0ea5e9">TempoAlerta</h2><h3>${esc(titulo)}</h3>
 ${linhas.map((l) => `<p>${esc(l)}</p>`).join('\n')}
 ${conselhos.length ? `<ul>${conselhos.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>` : ''}
-<p style="color:#64748b;font-size:12px">Dados meteorológicos: MET Norway.</p></div>`
+<p style="color:#64748b;font-size:12px">Fontes de previsão: MET Norway e Open-Meteo (contingência).</p></div>`
 }
 
 export function mensagemDiaria(u: UsuarioRow, c: CidadeRow, p: Previsao): Mensagem {

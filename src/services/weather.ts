@@ -10,6 +10,7 @@ export interface CidadeBusca {
 export interface Atual {
   hora: string
   temperatura: number
+  sensacao: number
   umidade: number
   vento_kmh: number
   chuva_mm: number
@@ -37,6 +38,7 @@ export interface Previsao {
   dias: Dia[]
   horas: Hora[]
   atualizado_em: string
+  fonte: string
 }
 
 export interface WeatherClient {

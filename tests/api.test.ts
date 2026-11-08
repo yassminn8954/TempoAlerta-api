@@ -90,7 +90,7 @@ describe('API', () => {
     assert.equal(p.status, 200)
     assert.equal(p.body.dias.length, 7)
     assert.equal(p.body.dias[0].dia_semana, 'Hoje')
-    assert.equal(p.body.fonte, 'MET Norway')
+    assert.equal(p.body.fonte, 'fake de teste')
     assert.deepEqual(p.body.alertas_ativos, [])
     assert.equal(p.body.status_geral.risco_geada_48h, false)
 

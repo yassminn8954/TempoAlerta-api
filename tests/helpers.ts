@@ -32,10 +32,11 @@ export function previsaoFake(c: Cenario = {}): Previsao {
     codigo: 2,
   }))
   return {
-    atual: { hora: '2026-10-26T06:30', temperatura: 19, umidade: 70, vento_kmh: 10, chuva_mm: 0, codigo: 2 },
+    atual: { hora: '2026-10-26T06:30', temperatura: 19, sensacao: 19, umidade: 70, vento_kmh: 10, chuva_mm: 0, codigo: 2 },
     dias,
     horas,
     atualizado_em: new Date().toISOString(),
+    fonte: 'fake de teste',
   }
 }
 
