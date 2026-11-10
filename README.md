@@ -21,7 +21,7 @@ DATABASE_URL=postgresql://postgres:SUA_SENHA@localhost:5432/tempoalerta
 
 Troque `postgres` pelo usuário PostgreSQL correto. Se a senha tiver caracteres especiais, codifique-os para URL (por exemplo, `@` como `%40`). Não compartilhe nem versiona o `.env`. Ao iniciar, a API cria as tabelas e índices necessários no banco indicado.
 
-Não há envio de e-mail simulado. `MAIL_MODE=off` desativa e-mail; para entrega real configure `MAIL_MODE=smtp`, `SMTP_HOST`, `SMTP_USER` e `SMTP_PASS`. O Telegram funciona como canal independente quando o bot está configurado e a conta está vinculada.
+Não há envio de e-mail simulado. `MAIL_MODE=off` desativa e-mail; para entrega real configure `MAIL_MODE=smtp`, `SMTP_HOST`, `SMTP_USER` e `SMTP_PASS`. O Telegram funciona como canal independente quando o bot está configurado e a conta está vinculada. Conexões SMTP têm limite de 10 segundos para conectar/receber a saudação e 15 segundos sem atividade, para que falhas do provedor sejam registradas em vez de manter a requisição pendente.
 
 Se o navegador mostrar `ERR_CONNECTION_REFUSED` para `localhost:3333`, inicie
 a API em um terminal na pasta `tempoalerta-api` com `npm run dev`. Para receber
