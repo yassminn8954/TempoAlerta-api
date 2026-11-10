@@ -35,7 +35,7 @@ export function preferenciasRoutes({ db }: Deps) {
     )
     res.json({
       destinatario: rows[0].email_destino ?? rows[0].email,
-      ativo: env.mailMode === 'smtp',
+      ativo: env.mailMode !== 'off',
     })
   })
 
@@ -44,7 +44,7 @@ export function preferenciasRoutes({ db }: Deps) {
       email: z.string().trim().toLowerCase().email().max(200),
     }).parse(req.body)
     await db.query('UPDATE usuarios SET email_destino = ? WHERE id = ?', [email, req.userId])
-    res.json({ destinatario: email, ativo: env.mailMode === 'smtp' })
+    res.json({ destinatario: email, ativo: env.mailMode !== 'off' })
   })
 
   r.get('/', async (req, res) => {

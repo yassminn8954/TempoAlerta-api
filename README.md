@@ -21,14 +21,15 @@ DATABASE_URL=postgresql://postgres:SUA_SENHA@localhost:5432/tempoalerta
 
 Troque `postgres` pelo usuário PostgreSQL correto. Se a senha tiver caracteres especiais, codifique-os para URL (por exemplo, `@` como `%40`). Não compartilhe nem versiona o `.env`. Ao iniciar, a API cria as tabelas e índices necessários no banco indicado.
 
-Não há envio de e-mail simulado. `MAIL_MODE=off` desativa e-mail; para entrega real configure `MAIL_MODE=smtp`, `SMTP_HOST`, `SMTP_USER` e `SMTP_PASS`. O Telegram funciona como canal independente quando o bot está configurado e a conta está vinculada. Conexões SMTP têm limite de 10 segundos para conectar/receber a saudação e 15 segundos sem atividade, para que falhas do provedor sejam registradas em vez de manter a requisição pendente.
+Não há envio de e-mail simulado. `MAIL_MODE=off` desativa e-mail; `MAIL_MODE=smtp` usa SMTP; `MAIL_MODE=resend` usa a API HTTPS do Resend (adequada ao plano Free do Render, que bloqueia tráfego SMTP de saída nas portas 25, 465 e 587). Para SMTP configure `SMTP_HOST`, `SMTP_USER` e `SMTP_PASS`; a conexão tem limites de tempo para que falhas sejam registradas em vez de manter a requisição pendente. Para Resend configure `RESEND_API_KEY` e `MAIL_FROM`. O remetente precisa ser autorizado no Resend; `onboarding@resend.dev` só pode enviar para destinatários verificados na conta Resend. Para enviar a outros endereços, verifique um domínio seu no Resend e use um remetente desse domínio. O Telegram funciona como canal independente quando o bot está configurado e a conta está vinculada.
 
 Se o navegador mostrar `ERR_CONNECTION_REFUSED` para `localhost:3333`, inicie
 a API em um terminal na pasta `tempoalerta-api` com `npm run dev`. Para receber
 notificações, configure ao menos um canal real: SMTP (`MAIL_MODE=smtp` e as
-variáveis SMTP) ou Telegram (`TELEGRAM_BOT_TOKEN` e conta vinculada em
+variáveis SMTP), Resend (`MAIL_MODE=resend`, `RESEND_API_KEY` e remetente
+autorizado) ou Telegram (`TELEGRAM_BOT_TOKEN` e conta vinculada em
 Preferências). O modo padrão `MAIL_MODE=off` não envia e-mail; no Render, o
-Blueprint também deixa e-mail desligado até você configurar SMTP no ambiente.
+Blueprint deixa e-mail desligado até você configurar um provedor no ambiente.
 Os envios automáticos ainda exigem `SCHEDULER=on`, preferência habilitada e
 horário dentro da janela de envio. O histórico detalha a falha por canal.
 

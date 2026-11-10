@@ -3,8 +3,8 @@ import 'dotenv/config'
 const num = (v: string | undefined, d: number) => (v ? Number(v) : d)
 const mailMode = process.env.MAIL_MODE ?? 'off'
 
-if (mailMode !== 'off' && mailMode !== 'smtp') {
-  throw new Error('MAIL_MODE deve ser "off" ou "smtp"; o modo de e-mail simulado foi removido')
+if (mailMode !== 'off' && mailMode !== 'smtp' && mailMode !== 'resend') {
+  throw new Error('MAIL_MODE deve ser "off", "smtp" ou "resend"')
 }
 
 export const env = {
@@ -18,7 +18,8 @@ export const env = {
   telegramBotUsername: (process.env.TELEGRAM_BOT_USERNAME ?? 'TempoAlertaBot').replace(/^@/, ''),
   tz: process.env.TZ_APP ?? 'America/Sao_Paulo',
   schedulerOn: process.env.SCHEDULER?.trim().toLowerCase() !== 'off',
-  mailMode: mailMode as 'off' | 'smtp',
+  mailMode: mailMode as 'off' | 'smtp' | 'resend',
+  resendApiKey: process.env.RESEND_API_KEY ?? '',
   smtp: {
     host: process.env.SMTP_HOST ?? '',
     port: num(process.env.SMTP_PORT, 587),
