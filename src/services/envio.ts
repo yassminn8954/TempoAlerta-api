@@ -28,7 +28,7 @@ export async function enviarERegistrar(
   const erros: string[] = []
   if (deps.mailer) {
     try {
-      await deps.mailer.enviar(u.email, msg.assunto, msg.texto, msg.html)
+      await deps.mailer.enviar(u.email_destino ?? u.email, msg.assunto, msg.texto, msg.html)
       algumEnviado = true
     } catch (e) {
       erros.push(`E-mail: ${e instanceof Error ? e.message : String(e)}`)

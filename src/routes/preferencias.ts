@@ -4,6 +4,7 @@ import type { CidadeRow, PreferenciaRow } from '../db.js'
 import { auth } from '../middleware/auth.js'
 import { cidadeDoUsuario, horariosDaPreferencia, paraCidade, paraPreferencia } from '../services/consultas.js'
 import type { Deps } from '../services/envio.js'
+import { env } from '../env.js'
 
 const schema = z
   .object({
@@ -26,6 +27,25 @@ const schema = z
 export function preferenciasRoutes({ db }: Deps) {
   const r = Router()
   r.use(auth)
+
+  r.get('/email', async (req, res) => {
+    const { rows } = await db.query<{ email: string; email_destino: string | null }>(
+      'SELECT email, email_destino FROM usuarios WHERE id = ?',
+      [req.userId],
+    )
+    res.json({
+      destinatario: rows[0].email_destino ?? rows[0].email,
+      ativo: env.mailMode === 'smtp',
+    })
+  })
+
+  r.put('/email', async (req, res) => {
+    const { email } = z.object({
+      email: z.string().trim().toLowerCase().email().max(200),
+    }).parse(req.body)
+    await db.query('UPDATE usuarios SET email_destino = ? WHERE id = ?', [email, req.userId])
+    res.json({ destinatario: email, ativo: env.mailMode === 'smtp' })
+  })
 
   r.get('/', async (req, res) => {
     const { rows } = await db.query<CidadeRow & PreferenciaRow & { preferencia_id: number }>(

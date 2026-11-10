@@ -65,7 +65,7 @@ frontend, sem barra no final.
 
 | tabela | colunas principais |
 |---|---|
-| `usuarios` | id, nome, email (único), senha_hash, perfil, criado_em |
+| `usuarios` | id, nome, email (único), email_destino, senha_hash, perfil, criado_em |
 | `cidades` | id, nome, estado, pais, latitude, longitude (única por lat/lon) |
 | `preferencias` | id, usuario_id → usuarios, cidade_id → cidades, configurações de alertas e principal |
 | `preferencia_horarios` | preferencia_id → preferencias, horário escolhido para uma previsão diária (até 4 por cidade) |
@@ -88,6 +88,7 @@ O serviço meteorológico usa a API de localização do [MET Norway](https://api
 | GET | `/auth/me` | usuário logado |
 | GET | `/cidades/busca?q=camp` | busca explícita de cidades (OpenStreetMap Nominatim, Brasil) |
 | GET | `/cidades` | cidades do usuário + preferência de cada uma |
+| GET/PUT | `/preferencias/email` | consulta ou salva o endereço destinatário de alertas (`{email}`) |
 | POST | `/cidades` | `{nome, estado, latitude, longitude, horario_envio?}` (a 1ª vira principal) |
 | PATCH | `/cidades/:id/principal` | define cidade principal |
 | DELETE | `/cidades/:id` | remove da lista do usuário |

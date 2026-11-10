@@ -74,12 +74,12 @@ export function alertasRoutes(deps: Deps) {
     )
     const a = alertas[0] as any
     if (!a) throw new HttpError(404, 'Alerta não encontrado')
-    const { rows: usuarios } = await db.query<Pick<UsuarioRow, 'email'>>(
-      'SELECT email FROM usuarios WHERE id = ?',
+    const { rows: usuarios } = await db.query<{ destinatario: string }>(
+      'SELECT COALESCE(email_destino, email) AS destinatario FROM usuarios WHERE id = ?',
       [req.userId],
     )
     const dados = typeof a.dados_json === 'string' ? JSON.parse(a.dados_json) : a.dados_json
-    res.json({ ...formatar(a), dados: dados ?? null, destinatario: usuarios[0].email })
+    res.json({ ...formatar(a), dados: dados ?? null, destinatario: usuarios[0].destinatario })
   })
 
   // Dispara um envio na hora (útil para demonstrar o sistema sem esperar o horário)

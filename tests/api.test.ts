@@ -90,6 +90,25 @@ describe('API', () => {
     assert.equal((await t.api('GET', `/preferencias/${c.id}`, undefined, outro.token)).status, 404)
   })
 
+  it('preferências de e-mail: valida e salva destinatário usado nos envios', async () => {
+    const u = await t.novoUsuario()
+    const inicial = await t.api('GET', '/preferencias/email', undefined, u.token)
+    assert.equal(inicial.status, 200)
+    assert.equal(inicial.body.destinatario, u.email)
+    assert.equal(inicial.body.ativo, env.mailMode === 'smtp')
+    assert.equal((await t.api('PUT', '/preferencias/email', { email: 'inválido' }, u.token)).status, 400)
+
+    const atualizado = await t.api('PUT', '/preferencias/email', { email: 'ALERTAS@EXEMPLO.COM' }, u.token)
+    assert.equal(atualizado.status, 200)
+    assert.equal(atualizado.body.destinatario, 'alertas@exemplo.com')
+    assert.equal((await t.api('GET', '/preferencias/email', undefined, u.token)).body.destinatario, 'alertas@exemplo.com')
+
+    const cidade = (await t.api('POST', '/cidades', t.campinas, u.token)).body
+    const envio = await t.api('POST', '/alertas/teste', { cidadeId: cidade.id, tipo: 'previsao_diaria' }, u.token)
+    assert.equal(envio.body.status, 'enviado')
+    assert.equal(t.mailer.enviados.at(-1)!.para, 'alertas@exemplo.com')
+  })
+
   it('preferências: salva até quatro horários distintos', async () => {
     const u = await t.novoUsuario()
     const c = (await t.api('POST', '/cidades', t.campinas, u.token)).body
