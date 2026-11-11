@@ -2,7 +2,6 @@ import type { AddressInfo } from 'node:net'
 import { createApp } from '../src/app.js'
 import { openTestDb } from '../src/db.js'
 import type { Deps } from '../src/services/envio.js'
-import type { Mailer } from '../src/services/mailer.js'
 import type { CidadeBusca, Previsao, WeatherClient } from '../src/services/weather.js'
 import type { TelegramNotifier } from '../src/services/telegram.js'
 
@@ -52,27 +51,19 @@ export class WeatherFake implements WeatherClient {
   }
 }
 
-export class MailerFake implements Mailer {
-  enviados: { para: string; assunto: string; texto: string }[] = []
-  falhar = false
-  async enviar(para: string, assunto: string, texto: string) {
-    if (this.falhar) throw new Error('smtp fora')
-    this.enviados.push({ para, assunto, texto })
-  }
-}
-
 export class TelegramFake implements TelegramNotifier {
   enviados: { chatId: string; texto: string }[] = []
+  falhar = false
   async sendMessage(chatId: string, texto: string) {
+    if (this.falhar) throw new Error('telegram fora')
     this.enviados.push({ chatId, texto })
   }
 }
 
 export async function subir() {
   const weather = new WeatherFake()
-  const mailer = new MailerFake()
   const telegram = new TelegramFake()
-  const deps: Deps = { db: openTestDb(), weather, mailer, telegram }
+  const deps: Deps = { db: openTestDb(), weather, telegram }
   const server = createApp(deps).listen(0)
   const base = `http://localhost:${(server.address() as AddressInfo).port}/api`
 
@@ -99,7 +90,6 @@ export async function subir() {
   return {
     deps,
     weather,
-    mailer,
     telegram,
     api,
     novoUsuario,

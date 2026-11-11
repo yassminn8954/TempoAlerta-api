@@ -90,23 +90,10 @@ describe('API', () => {
     assert.equal((await t.api('GET', `/preferencias/${c.id}`, undefined, outro.token)).status, 404)
   })
 
-  it('preferências de e-mail: valida e salva destinatário usado nos envios', async () => {
+  it('não expõe mais a configuração de destinatário de e-mail', async () => {
     const u = await t.novoUsuario()
-    const inicial = await t.api('GET', '/preferencias/email', undefined, u.token)
-    assert.equal(inicial.status, 200)
-    assert.equal(inicial.body.destinatario, u.email)
-    assert.equal(inicial.body.ativo, env.mailMode === 'smtp')
-    assert.equal((await t.api('PUT', '/preferencias/email', { email: 'inválido' }, u.token)).status, 400)
-
-    const atualizado = await t.api('PUT', '/preferencias/email', { email: 'ALERTAS@EXEMPLO.COM' }, u.token)
-    assert.equal(atualizado.status, 200)
-    assert.equal(atualizado.body.destinatario, 'alertas@exemplo.com')
-    assert.equal((await t.api('GET', '/preferencias/email', undefined, u.token)).body.destinatario, 'alertas@exemplo.com')
-
-    const cidade = (await t.api('POST', '/cidades', t.campinas, u.token)).body
-    const envio = await t.api('POST', '/alertas/teste', { cidadeId: cidade.id, tipo: 'previsao_diaria' }, u.token)
-    assert.equal(envio.body.status, 'enviado')
-    assert.equal(t.mailer.enviados.at(-1)!.para, 'alertas@exemplo.com')
+    assert.equal((await t.api('GET', '/preferencias/email', undefined, u.token)).status, 400)
+    assert.equal((await t.api('PUT', '/preferencias/email', { email: 'x@example.com' }, u.token)).status, 400)
   })
 
   it('preferências: salva até quatro horários distintos', async () => {
@@ -240,31 +227,27 @@ describe('API', () => {
   it('não registra como enviado quando não há canal real configurado', async () => {
     const u = await t.novoUsuario()
     const cidade = (await t.api('POST', '/cidades', t.campinas, u.token)).body
-    const mailer = t.deps.mailer
-    t.deps.mailer = undefined
-    try {
-      const resultado = await t.api(
-        'POST',
-        '/alertas/teste',
-        { cidadeId: cidade.id, tipo: 'previsao_diaria' },
-        u.token,
-      )
-      assert.equal(resultado.body.status, 'falhou')
-      assert.match(resultado.body.erro, /E-mail: canal desativado/)
-      assert.match(resultado.body.erro, /Telegram:/)
-    } finally {
-      t.deps.mailer = mailer
-    }
+    const resultado = await t.api(
+      'POST',
+      '/alertas/teste',
+      { cidadeId: cidade.id, tipo: 'previsao_diaria' },
+      u.token,
+    )
+    assert.equal(resultado.body.status, 'falhou')
+    assert.match(resultado.body.erro, /Telegram:/)
+    assert.doesNotMatch(resultado.body.erro, /e-mail/i)
   })
 
   it('histórico: teste de envio, filtros, detalhe e isolamento entre usuários', async () => {
     const u = await t.novoUsuario()
+    await t.deps.db.query('UPDATE usuarios SET telegram_chat_id = ? WHERE id = ?', [`chat_${u.id}`, u.id])
     const c = (await t.api('POST', '/cidades', t.campinas, u.token)).body
     const a = await t.api('POST', '/alertas/teste', { cidadeId: c.id, tipo: 'previsao_diaria' }, u.token)
     assert.equal(a.body.status, 'enviado')
     t.weather.cenario = { minima: 2 }
     await t.api('POST', '/alertas/teste', { cidadeId: c.id, tipo: 'geada' }, u.token)
-    assert.equal(t.mailer.enviados.at(-1)!.para, u.email)
+    assert.equal(t.telegram.enviados.at(-1)!.chatId, `chat_${u.id}`)
+    assert.match(t.telegram.enviados.at(-1)!.texto, /Alerta de geada/)
 
     const todos = await t.api('GET', '/alertas', undefined, u.token)
     assert.equal(todos.body.total, 2)
@@ -273,7 +256,7 @@ describe('API', () => {
     assert.equal((await t.api('GET', '/alertas?busca=100%25', undefined, u.token)).body.total, 0)
 
     const det = await t.api('GET', `/alertas/${a.body.id}`, undefined, u.token)
-    assert.equal(det.body.destinatario, u.email)
+    assert.equal(det.body.destinatario, undefined)
     assert.ok(det.body.dados)
 
     const outro = await t.novoUsuario()

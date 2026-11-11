@@ -17,7 +17,6 @@ export function telegramRoutes(db: DB) {
       vinculado: Boolean(rows[0]?.telegram_chat_id),
       bot_username: env.telegramBotUsername,
       bot_configurado: Boolean(env.telegramBotToken),
-      email_ativo: env.mailMode !== 'off',
     })
   })
 

@@ -1,6 +1,6 @@
 # TempoAlerta — API (back-end)
 
-Node 20+ · TypeScript · Express 5 · PostgreSQL · MET Norway (previsão principal) · Open-Meteo (contingência) · OpenStreetMap Nominatim (busca de cidades) · node-cron · Nodemailer
+Node 20+ · TypeScript · Express 5 · PostgreSQL · MET Norway (previsão principal) · Open-Meteo (contingência) · OpenStreetMap Nominatim (busca de cidades) · node-cron · Telegram
 
 ## Rodar
 
@@ -21,17 +21,13 @@ DATABASE_URL=postgresql://postgres:SUA_SENHA@localhost:5432/tempoalerta
 
 Troque `postgres` pelo usuário PostgreSQL correto. Se a senha tiver caracteres especiais, codifique-os para URL (por exemplo, `@` como `%40`). Não compartilhe nem versiona o `.env`. Ao iniciar, a API cria as tabelas e índices necessários no banco indicado.
 
-Não há envio de e-mail simulado. `MAIL_MODE=off` desativa e-mail; `MAIL_MODE=smtp` usa SMTP; `MAIL_MODE=resend` usa a API HTTPS do Resend (adequada ao plano Free do Render, que bloqueia tráfego SMTP de saída nas portas 25, 465 e 587). Para SMTP configure `SMTP_HOST`, `SMTP_USER` e `SMTP_PASS`; a conexão tem limites de tempo para que falhas sejam registradas em vez de manter a requisição pendente. Para Resend configure `RESEND_API_KEY` e `MAIL_FROM`. O remetente precisa ser autorizado no Resend; `onboarding@resend.dev` só pode enviar para destinatários verificados na conta Resend. Para enviar a outros endereços, verifique um domínio seu no Resend e use um remetente desse domínio. O Telegram funciona como canal independente quando o bot está configurado e a conta está vinculada.
+Os alertas são enviados exclusivamente pelo Telegram. Configure `TELEGRAM_BOT_TOKEN` e vincule a conta ao bot na seção **Telegram** abaixo. O e-mail informado no cadastro é usado apenas para login.
 
 Se o navegador mostrar `ERR_CONNECTION_REFUSED` para `localhost:3333`, inicie
 a API em um terminal na pasta `tempoalerta-api` com `npm run dev`. Para receber
-notificações, configure ao menos um canal real: SMTP (`MAIL_MODE=smtp` e as
-variáveis SMTP), Resend (`MAIL_MODE=resend`, `RESEND_API_KEY` e remetente
-autorizado) ou Telegram (`TELEGRAM_BOT_TOKEN` e conta vinculada em
-Preferências). O modo padrão `MAIL_MODE=off` não envia e-mail; no Render, o
-Blueprint deixa e-mail desligado até você configurar um provedor no ambiente.
-Os envios automáticos ainda exigem `SCHEDULER=on`, preferência habilitada e
-horário dentro da janela de envio. O histórico detalha a falha por canal.
+notificações, configure `TELEGRAM_BOT_TOKEN` e vincule a conta ao bot. Os envios
+automáticos ainda exigem `SCHEDULER=on`, preferência habilitada e horário dentro
+da janela de envio. O histórico detalha falhas no envio pelo Telegram.
 
 ## Telegram
 
@@ -53,10 +49,10 @@ para o repositório GitHub `TempoAlerta-api`, crie um **Blueprint** no Render e
 conecte esse repositório. O Render instalará as dependências, iniciará a API e
 usará `/api/saude` para verificar se ela está ativa.
 
-O Blueprint gera `JWT_SECRET` automaticamente e configura e-mail em modo `log`,
-agendador desligado e SQLite em `./data/tempoalerta.db`. No plano gratuito, o
-disco é temporário: reinícios e novos deploys podem apagar os dados. Use apenas
-contas e dados de demonstração; não armazene dados reais nesse serviço.
+O Blueprint gera `JWT_SECRET` automaticamente. Configure `TELEGRAM_BOT_TOKEN`
+para habilitar o envio de alertas. No plano gratuito, o disco é temporário:
+reinícios e novos deploys podem apagar os dados. Use apenas contas e dados de
+demonstração; não armazene dados reais nesse serviço.
 
 Se a URL do frontend for diferente de `https://tempoalerta-web.onrender.com`,
 altere `CORS_ORIGIN` nas variáveis do serviço da API para a URL pública do
@@ -66,7 +62,7 @@ frontend, sem barra no final.
 
 | tabela | colunas principais |
 |---|---|
-| `usuarios` | id, nome, email (único), email_destino, senha_hash, perfil, criado_em |
+| `usuarios` | id, nome, email (único, usado no login), senha_hash, perfil, criado_em |
 | `cidades` | id, nome, estado, pais, latitude, longitude (única por lat/lon) |
 | `preferencias` | id, usuario_id → usuarios, cidade_id → cidades, configurações de alertas e principal |
 | `preferencia_horarios` | preferencia_id → preferencias, horário escolhido para uma previsão diária (até 4 por cidade) |
@@ -89,7 +85,6 @@ O serviço meteorológico usa a API de localização do [MET Norway](https://api
 | GET | `/auth/me` | usuário logado |
 | GET | `/cidades/busca?q=camp` | busca explícita de cidades (OpenStreetMap Nominatim, Brasil) |
 | GET | `/cidades` | cidades do usuário + preferência de cada uma |
-| GET/PUT | `/preferencias/email` | consulta ou salva o endereço destinatário de alertas (`{email}`) |
 | POST | `/cidades` | `{nome, estado, latitude, longitude, horario_envio?}` (a 1ª vira principal) |
 | PATCH | `/cidades/:id/principal` | define cidade principal |
 | DELETE | `/cidades/:id` | remove da lista do usuário |

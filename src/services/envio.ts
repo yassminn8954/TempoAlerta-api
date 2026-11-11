@@ -1,7 +1,6 @@
 import { env } from '../env.js'
 import type { CidadeRow, DB, Tipo, UsuarioRow } from '../db.js'
 import { partesLocais } from '../tz.js'
-import type { Mailer } from './mailer.js'
 import type { Mensagem, PeriodoDiario } from './mensagens.js'
 import type { WeatherClient } from './weather.js'
 import type { TelegramNotifier } from './telegram.js'
@@ -9,11 +8,10 @@ import type { TelegramNotifier } from './telegram.js'
 export interface Deps {
   db: DB
   weather: WeatherClient
-  mailer?: Mailer
   telegram?: TelegramNotifier
 }
 
-/** Envia o e-mail e grava o resultado em alertas_enviados (enviado ou falhou). */
+/** Envia pelo Telegram e grava o resultado em alertas_enviados (enviado ou falhou). */
 export async function enviarERegistrar(
   deps: Deps,
   u: UsuarioRow,
@@ -26,16 +24,6 @@ export async function enviarERegistrar(
 ): Promise<{ id: number; status: 'enviado' | 'falhou'; erro: string | null }> {
   let algumEnviado = false
   const erros: string[] = []
-  if (deps.mailer) {
-    try {
-      await deps.mailer.enviar(u.email_destino ?? u.email, msg.assunto, msg.texto, msg.html)
-      algumEnviado = true
-    } catch (e) {
-      erros.push(`E-mail: ${e instanceof Error ? e.message : String(e)}`)
-    }
-  } else {
-    erros.push('E-mail: canal desativado')
-  }
   if (u.telegram_chat_id) {
     if (deps.telegram) {
       try {

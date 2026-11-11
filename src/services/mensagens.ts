@@ -5,7 +5,6 @@ import type { EventoChuva, EventoGeada } from './regras.js'
 export interface Mensagem {
   assunto: string
   texto: string
-  html: string
   dados: Record<string, unknown>
 }
 
@@ -13,15 +12,6 @@ const r0 = (n: number) => Math.round(n)
 const primeiroNome = (n: string) => n.trim().split(/\s+/)[0]
 const local = (c: CidadeRow) => (c.estado ? `${c.nome}, ${c.estado}` : c.nome)
 const hh = (iso: string) => iso.slice(11, 16).replace(':00', 'h').replace(/^0/, '')
-
-function html(titulo: string, linhas: string[], conselhos: string[] = []) {
-  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
-  return `<div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;color:#0f172a">
-<h2 style="color:#0ea5e9">TempoAlerta</h2><h3>${esc(titulo)}</h3>
-${linhas.map((l) => `<p>${esc(l)}</p>`).join('\n')}
-${conselhos.length ? `<ul>${conselhos.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>` : ''}
-<p style="color:#64748b;font-size:12px">Fontes de previsão: MET Norway e Open-Meteo (contingência).</p></div>`
-}
 
 export type PeriodoDiario = 'madrugada' | 'manha' | 'tarde' | 'noite'
 
@@ -75,7 +65,6 @@ export function mensagemDiaria(
   return {
     assunto: `Previsão ${periodoTexto} em ${local(c)}`,
     texto: linhas.join('\n'),
-    html: html(`Previsão ${periodoTexto} — ${local(c)}`, linhas),
     dados: { dia: hoje, atual: p.atual, periodo, horario_agendado: horarioAgendado },
   }
 }
@@ -90,7 +79,6 @@ export function mensagemChuva(u: UsuarioRow, c: CidadeRow, e: EventoChuva, limia
   return {
     assunto: `Alerta de chuva forte em ${local(c)}`,
     texto: linhas.join('\n') + '\n- ' + dicas.join('\n- '),
-    html: html(`Chuva forte — ${local(c)}`, linhas, dicas),
     dados: { ...e, limiar_chuva_mm: limiar },
   }
 }
@@ -105,7 +93,6 @@ export function mensagemGeada(u: UsuarioRow, c: CidadeRow, e: EventoGeada, limia
   return {
     assunto: `Alerta de geada em ${local(c)}`,
     texto: linhas.join('\n') + '\n- ' + dicas.join('\n- '),
-    html: html(`Risco de geada — ${local(c)}`, linhas, dicas),
     dados: { ...e, limiar_geada_c: limiar },
   }
 }

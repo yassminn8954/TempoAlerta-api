@@ -34,11 +34,12 @@ describe('agendador', () => {
   beforeEach(async () => {
     await t.deps.db.query('DELETE FROM alertas_enviados')
     await t.deps.db.query('DELETE FROM preferencias')
-    t.mailer.enviados.length = 0
-    t.mailer.falhar = false
+    t.telegram.enviados.length = 0
+    t.telegram.falhar = false
     t.weather.falhar = false
     t.weather.cenario = {}
     u = await t.novoUsuario()
+    await t.deps.db.query('UPDATE usuarios SET telegram_chat_id = ? WHERE id = ?', [`chat_${u.id}`, u.id])
     cidadeId = (await t.api('POST', '/cidades', { ...t.campinas, horario_envio: '06:00' }, u.token)).body.id
   })
 
@@ -46,14 +47,14 @@ describe('agendador', () => {
     assert.equal(await processarDiarias(t.deps, as0559), 0)
     assert.equal(await processarDiarias(t.deps, as0600), 1)
     assert.equal(await processarDiarias(t.deps, as0601), 0)
-    assert.equal(t.mailer.enviados.length, 1)
-    assert.match(t.mailer.enviados[0].texto, /Bom dia, Carlos/)
+    assert.equal(t.telegram.enviados.length, 1)
+    assert.match(t.telegram.enviados[0].texto, /Bom dia, Carlos/)
   })
 
   it('envia a atualização da tarde no horário configurado com mensagem própria do período', async () => {
     assert.equal(await processarDiarias(t.deps, as1600), 1)
-    assert.match(t.mailer.enviados[0].texto, /Boa tarde, Carlos/)
-    assert.match(t.mailer.enviados[0].assunto, /tarde/)
+    assert.match(t.telegram.enviados[0].texto, /Boa tarde, Carlos/)
+    assert.match(t.telegram.enviados[0].texto, /tarde/)
     const { rows } = await t.deps.db.query<{ turno_agendado: string; horario_agendado: string }>(
       `SELECT turno_agendado, horario_agendado FROM alertas_enviados WHERE tipo='previsao_diaria'`,
     )
@@ -68,24 +69,24 @@ describe('agendador', () => {
     assert.equal(await processarDiarias(t.deps, as1200), 1)
     assert.equal(await processarDiarias(t.deps, as1600), 1)
     assert.equal(await processarDiarias(t.deps, as2000), 1)
-    assert.equal(t.mailer.enviados.length, 4)
-    assert.match(t.mailer.enviados[0].texto, /Bom dia, Carlos/)
-    assert.match(t.mailer.enviados[1].texto, /Boa tarde, Carlos/)
-    assert.match(t.mailer.enviados[2].texto, /Boa tarde, Carlos/)
-    assert.match(t.mailer.enviados[3].texto, /Boa noite, Carlos/)
-    assert.match(t.mailer.enviados[2].texto, /programada para 16:00/)
+    assert.equal(t.telegram.enviados.length, 4)
+    assert.match(t.telegram.enviados[0].texto, /Bom dia, Carlos/)
+    assert.match(t.telegram.enviados[1].texto, /Boa tarde, Carlos/)
+    assert.match(t.telegram.enviados[2].texto, /Boa tarde, Carlos/)
+    assert.match(t.telegram.enviados[3].texto, /Boa noite, Carlos/)
+    assert.match(t.telegram.enviados[2].texto, /programada para 16:00/)
   })
 
   it('faz retry independente para horários adicionais', async () => {
     await t.api('PUT', `/preferencias/${cidadeId}`, { horarios_previsao: ['06:00', '12:00'] }, u.token)
-    t.mailer.falhar = true
+    t.telegram.falhar = true
     assert.equal(await processarDiarias(t.deps, as0600), 0)
     assert.equal(await contar(t, 'previsao_diaria', 'falhou'), 1)
-    t.mailer.falhar = false
+    t.telegram.falhar = false
     assert.equal(await processarDiarias(t.deps, new Date(as0600.getTime() + 11 * 60_000)), 1)
-    t.mailer.falhar = true
+    t.telegram.falhar = true
     assert.equal(await processarDiarias(t.deps, as1200), 0)
-    t.mailer.falhar = false
+    t.telegram.falhar = false
     assert.equal(await processarDiarias(t.deps, new Date(as1200.getTime() + 11 * 60_000)), 1)
     assert.equal(await contar(t, 'previsao_diaria', 'enviado'), 2)
   })
@@ -100,16 +101,16 @@ describe('agendador', () => {
   it('não envia previsão diária atrasada se o horário daquele dia foi perdido', async () => {
     assert.equal(await processarDiarias(t.deps, as0630), 0)
     assert.equal(await contar(t, 'previsao_diaria'), 0)
-    assert.equal(t.mailer.enviados.length, 0)
+    assert.equal(t.telegram.enviados.length, 0)
   })
 
   it('envia novamente no mesmo dia se a preferência for alterada para um novo horário', async () => {
     assert.equal(await processarDiarias(t.deps, as0600), 1)
-    assert.equal(t.mailer.enviados.length, 1)
+    assert.equal(t.telegram.enviados.length, 1)
 
     await t.api('PUT', `/preferencias/${cidadeId}`, { horario_envio: '06:03' }, u.token)
     assert.equal(await processarDiarias(t.deps, as0603), 1)
-    assert.equal(t.mailer.enviados.length, 2)
+    assert.equal(t.telegram.enviados.length, 2)
 
     const { rows } = await t.deps.db.query<{ horario_agendado: string }>(
       `SELECT horario_agendado FROM alertas_enviados
@@ -119,7 +120,7 @@ describe('agendador', () => {
     )
     assert.deepEqual(rows.map((row) => row.horario_agendado), ['06:00', '06:03'])
     assert.equal(await processarDiarias(t.deps, as0603), 0)
-    assert.equal(t.mailer.enviados.length, 2)
+    assert.equal(t.telegram.enviados.length, 2)
   })
 
   it('previsão diária: testes manuais não contam como envio nem como limite de falhas', async () => {
@@ -141,7 +142,7 @@ describe('agendador', () => {
     )
 
     assert.equal(await processarDiarias(t.deps, as0600), 1)
-    assert.equal(t.mailer.enviados.length, 1)
+    assert.equal(t.telegram.enviados.length, 1)
     assert.equal(await contar(t, 'previsao_diaria', 'enviado'), 2)
   })
 
@@ -152,13 +153,13 @@ describe('agendador', () => {
     assert.equal(await processarDiarias(t.deps, as0800), 0)
   })
 
-  it('previsão diária: falha de e-mail registra "falhou" e não repete antes de 10 min', async () => {
-    t.mailer.falhar = true
+  it('previsão diária: falha do Telegram registra "falhou" e não repete antes de 10 min', async () => {
+    t.telegram.falhar = true
     assert.equal(await processarDiarias(t.deps, as0600), 0)
     assert.equal(await contar(t, 'previsao_diaria', 'falhou'), 1)
     assert.equal(await processarDiarias(t.deps, new Date(as0600.getTime() + 60_000)), 0)
     assert.equal(await contar(t, 'previsao_diaria', 'falhou'), 1)
-    t.mailer.falhar = false
+    t.telegram.falhar = false
     assert.equal(await processarDiarias(t.deps, new Date(as0600.getTime() + 11 * 60_000)), 1)
   })
 
@@ -171,7 +172,7 @@ describe('agendador', () => {
     const row = rows[0]
     assert.equal(row.status, 'falhou')
     assert.match(row.erro, /api fora/)
-    assert.equal(t.mailer.enviados.length, 0)
+    assert.equal(t.telegram.enviados.length, 0)
   })
 
   it('chuva forte: dispara acima do limiar e não repete em 12h', async () => {
@@ -212,7 +213,7 @@ describe('agendador', () => {
     assert.equal(await processarAlertas(t.deps, as0630), 0)
     await t.api('PUT', `/preferencias/${cidadeId}`, { alerta_geada: true }, u.token)
     assert.equal(await processarAlertas(t.deps, as0630), 1)
-    assert.match(t.mailer.enviados[0].texto, /mínima prevista de 2°C/)
+    assert.match(t.telegram.enviados[0].texto, /mínima prevista de 2°C/)
   })
 
   it('sem condição de risco, não envia nada', async () => {
